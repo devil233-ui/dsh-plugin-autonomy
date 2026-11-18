@@ -70,7 +70,9 @@ export function renderFramingText(input: FramingInput): string {
   }
   if (input.openIntents.length > 0) {
     lines.push('Open intents you left for yourself:');
-    for (const intent of input.openIntents.slice(0, 8)) lines.push(intentLine(intent, input.timeZone));
+    // 上游 whalelife 的 intent-visibility 契约：未完成意图必须全部可见，
+    // 所以这里不再截断，只受台账上限（MAX_INTENTS=50）约束。
+    for (const intent of input.openIntents) lines.push(intentLine(intent, input.timeZone));
   }
   lines.push('');
   const motivation = input.motivation?.trim() ?? '';
