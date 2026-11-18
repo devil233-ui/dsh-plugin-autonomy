@@ -1,0 +1,4 @@
+# dsh-plugin-autonomy — bundle patch layer（profile 的 dsh.profile.bundles 里列了本包即整层生效）
+- insert:
+    - id: dsh-autonomy
+      name: dsh-plugin-autonomy

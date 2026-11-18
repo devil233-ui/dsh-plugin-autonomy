@@ -1,0 +1,86 @@
+/**
+ * The message that starts an autonomous turn.
+ *
+ * It is a user-role message, because that is the only role that can start a
+ * turn, but it carries a producer-owned `notice` source so the GUI renders it
+ * as a context chip rather than a user bubble, and so the model can tell it
+ * apart from a real person talking. The text states that fact explicitly and
+ * says what the four valid endings are.
+ */
+
+import { boundContextSummary, createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm';
+
+import { formatLocalStamp } from '../core/schedule.js';
+
+export const PLUGIN_NAME = 'dsh-autonomy';
+export const SOURCE_KIND = `plugin:${PLUGIN_NAME}`;
+export const FRAMING_MARKER = '[dsh-autonomy wake ';
+
+export type WakeTrigger = 'random' | 'self' | 'agreement' | 'manual';
+
+export interface FramingInput {
+  runId: string;
+  sessionId: string;
+  trigger: WakeTrigger;
+  now: Date;
+  /** Why this roll woke the session (probability value, self-note, …). */
+  note?: string;
+  /** Open intents rendered into the prompt so the model need not re-read them. */
+  openIntents: readonly { text: string; kind: string; dueAt?: string }[];
+  timeZone: string;
+}
+
+/**
+ * Notice-form producer source. The cast is needed because the published
+ * `dsh-llm` types still model the retired v3 `{kind:'plugin'}` wrapper as the
+ * only plugin source, while the v4 write path requires a producer-owned kind.
+ */
+export function autonomyNoticeSource(summary: string): UserMessage['source'] {
+  return {
+    kind: SOURCE_KIND,
+    form: 'notice',
+    summary: boundContextSummary(summary),
+  } as unknown as UserMessage['source'];
+}
+
+function intentLine(intent: FramingInput['openIntents'][number], timeZone: string): string {
+  const parts = [`- [${intent.kind}] ${intent.text}`];
+  if (intent.dueAt !== undefined) parts.push(`(due ${formatLocalStamp(new Date(intent.dueAt), timeZone)})`);
+  return parts.join(' ');
+}
+
+/** Render the framing text. Kept small: it is paid on every wake. */
+export function renderFramingText(input: FramingInput): string {
+  const lines: string[] = [];
+  lines.push(`${FRAMING_MARKER}${input.runId} ${input.trigger} session=${input.sessionId}]`);
+  lines.push(`Now ${formatLocalStamp(input.now, input.timeZone)}.`);
+  lines.push('This is a scheduled self-check from the autonomy plugin, not a message from the user.');
+  if (input.note !== undefined && input.note.trim() !== '') {
+    lines.push(`Reason for this wake: ${input.note.trim()}`);
+  }
+  if (input.openIntents.length > 0) {
+    lines.push('Open intents you left for yourself:');
+    for (const intent of input.openIntents.slice(0, 8)) lines.push(intentLine(intent, input.timeZone));
+  }
+  lines.push('');
+  lines.push('Decide what to do with this moment:');
+  lines.push('- speak to the user if there is something genuinely worth saying;');
+  lines.push('- act on something useful (a task, a file, a check) if that is better;');
+  lines.push('- or do nothing, which is a valid and expected outcome.');
+  lines.push(
+    'You may also record an intent for later with autonomy_intents, or schedule your own wake with autonomy_schedule.',
+  );
+  lines.push(
+    'End this turn with autonomy_finish(run_id, decision, reason): decision is "acted" or "no_action", reason is one short sentence.',
+  );
+  return lines.join('\n');
+}
+
+/** Build the wire message for one autonomous turn. */
+export function createFramingMessage(input: FramingInput): UserMessage {
+  const text = renderFramingText(input);
+  return createUserMessage({
+    content: [{ type: 'text', text }],
+    source: autonomyNoticeSource(`autonomy ${input.trigger} check`),
+  });
+}
