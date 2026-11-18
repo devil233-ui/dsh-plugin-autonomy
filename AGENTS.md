@@ -35,7 +35,7 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 DSH_HOME=/tmp/iso dsh --profile iso --from-default-profile web --dump-config
 DSH_HOME=/tmp/iso dsh plugin --profile iso add <本仓库绝对路径>   # 出 link: 说明，源目录不会被搬
 # 模型凭据：把生产的 llm-pi-ai + agent-default-model 复制进 iso 的 cordis.patch.yml，
-# 并把 WB_API_KEY 以环境变量注入启动命令
+# 再按 apiKeyEnv 指定的变量名（下文以 API_KEY 代指）把 key 注入启动命令
 DSH_HOME=/tmp/iso dsh --profile iso --port 8611 --no-open
 ```
 
