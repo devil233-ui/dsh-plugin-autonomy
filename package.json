@@ -20,8 +20,7 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
-    "AGENTS.md",
-    "LICENSE"
+    "AGENTS.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -58,7 +57,6 @@
     "意图",
     "判断记录"
   ],
-  "license": "MIT",
   "engines": {
     "node": ">=22.5"
   },

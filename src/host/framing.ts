@@ -5,7 +5,8 @@
  * turn, but it carries a producer-owned `notice` source so the GUI renders it
  * as a context chip rather than a user bubble, and so the model can tell it
  * apart from a real person talking. The text states that fact explicitly and
- * says what the four valid endings are.
+ * lists the three ways the turn can end — speak, act, or stay silent — then
+ * asks for the `autonomy_finish` bookkeeping call.
  */
 
 import { boundContextSummary, createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm';

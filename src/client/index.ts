@@ -313,7 +313,7 @@ export function apply(ctx: Context): void {
         activeRow === undefined
           ? h!('div', { className: 'dsh-autonomy-empty' }, '还没有记录到会话：先在目标会话里聊一句，或在上面的「目标会话」里填 id。')
           : h!('div', { className: 'dsh-autonomy-meta' },
-            `${activeRow.sessionId} · ${activeRow.live ? '在线' : '冷会话（唤醒时恢复）'}`
+            `${activeRow.sessionId} · ${activeRow.live ? '在线' : '冷会话（唤醒需 resume，本版未实测）'}`
             + ` · 下次掷骰 ${fmtTime(activeRow.nextCheckAt)}`
             + ` · 上次活动 ${fmtTime(activeRow.lastActivityAt)}`
             + (activeRow.selfWake === null ? '' : ` · 自排 ${fmtTime(activeRow.selfWake.at)}`)),
