@@ -8,7 +8,7 @@ const owner = { kind: 'aurabot', speaker: { role: 'owner', chat: 'private' } }
 const panel = { kind: 'aurabot', speaker: { role: 'none' } }
 
 describe('quiet gate', () => {
-  it('drops a guest aurabot turn inside the sleep window', () => {
+  it('suppresses a guest aurabot turn inside the quiet window', () => {
     assert.equal(shouldSuppressIncoming({ source: guest, sleeping: true, blockGuest: true }), true)
   })
 
@@ -39,7 +39,7 @@ describe('quiet gate', () => {
 
   it('names the chat in the reason', () => {
     const reason = suppressReason({ source: guest, sleeping: true, blockGuest: true })
-    assert.match(String(reason), /sleep window, guest turn from group/)
+    assert.match(String(reason), /quiet window, guest turn from group/)
     assert.equal(suppressReason({ source: guest, sleeping: false, blockGuest: true }), null)
   })
 })

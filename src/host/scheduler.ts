@@ -131,7 +131,7 @@ export class Scheduler {
   }
 
   #windows(config: AutonomyConfig): SleepWindow[] {
-    const raw = config.sleepWindows.join(',');
+    const raw = config.quietWindows.join(',');
     if (this.#windowsCache !== undefined && this.#windowsCache.raw === raw) return this.#windowsCache.windows;
     const windows = parseSleepWindows(raw);
     this.#windowsCache = { raw, windows };

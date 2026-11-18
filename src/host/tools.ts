@@ -118,7 +118,7 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
             enabled: config.enabled,
             allow_self_wake: config.allowSelfWake,
             timezone: config.timezone === '' ? 'host default' : config.timezone,
-            sleep_windows: config.sleepWindows,
+            quiet_windows: config.quietWindows,
             self_wake_during_sleep: config.selfWakeDuringSleep,
           });
         }

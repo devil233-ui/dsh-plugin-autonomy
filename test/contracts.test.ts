@@ -78,7 +78,7 @@ function makeScheduler(config: Partial<AutonomyConfig> = {}, sessions: string[] 
 }
 
 test('quiet-contract：睡眠时段内不消费自排唤醒，也不掷骰', async () => {
-  const { scheduler, state, driver } = makeScheduler({ sleepWindows: ['00:00-23:59'], probability: 1 });
+  const { scheduler, state, driver } = makeScheduler({ quietWindows: ['00:00-23:59'], probability: 1 });
   const session = state.session('s1', Date.now()) as SessionState;
   session.nextCheckAt = 0;
   session.selfWake = { at: 0, note: 'should stay pending' };

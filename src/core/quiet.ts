@@ -42,5 +42,5 @@ export function shouldSuppressIncoming(input: QuietGateInput): boolean {
 export function suppressReason(input: QuietGateInput): string | null {
   if (!shouldSuppressIncoming(input)) return null;
   const chat = input.source?.speaker?.chat;
-  return chat === undefined ? 'sleep window, guest turn' : `sleep window, guest turn from ${chat}`;
+  return chat === undefined ? 'quiet window, guest turn' : `quiet window, guest turn from ${chat}`;
 }

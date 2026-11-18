@@ -2,7 +2,7 @@
 
 自主意识插件：**宿主按节律掷骰决定要不要唤醒，醒来后由模型自己决定行动还是沉默。**
 
-这不是"让模型给自己排闹钟"。节律权在插件手里——外部间隔、概率、睡眠时段、每日额度都由宿主侧计时器掌管；模型既不预约下一次，也不知道下一次什么时候来。被唤醒的那一轮，模型拿到的是一段标注为非用户来源的自检提示，它可以说话、可以做事、也可以什么都不做，并用自己的话交代理由。
+这不是"让模型给自己排闹钟"。节律权在插件手里——外部间隔、概率、对外静默窗口、每日额度都由宿主侧计时器掌管；模型既不预约下一次，也不知道下一次什么时候来。被唤醒的那一轮，模型拿到的是一段标注为非用户来源的自检提示，它可以说话、可以做事、也可以什么都不做，并用自己的话交代理由。
 
 ## 与 dsh-proactive 的区别
 
@@ -10,11 +10,11 @@
 | --- | --- | --- |
 | 谁决定何时醒 | 模型自己排闹钟（once/every/cron/file） | 宿主按平均间隔 + 抖动掷骰 |
 | 概率 | 排了就一定触发 | 每次按 `probability` 掷，可 `adaptive` 随距上次活动变化 |
-| 睡眠时段 | quiet hours 抑制投递 | 睡眠窗口内不掷骰（自排唤醒可豁免） |
+| 对外静默 | quiet hours 抑制投递 | 对外静默窗口内不掷骰（自排唤醒可豁免） |
 | 意图台账 | 无 | 想法 / 约定两类，带版本与状态机 |
 | 判断记录 | 每次投递一条 run | 每次掷骰命中一条 run，记 trigger / decision / reason / 起止时间 |
 
-节律语义对齐 AstrBot 的 `astrbot_plugin_autonomy`（上游原版 `whalelife-plugin-autonomy`）：掷骰、概率、自适应倍率、睡眠窗口（含跨夜与跨周）、意图台账、判断记录、面板手动触发，这些行为一一对应；上游的 `allowSelfWake`、`timezone`、`motivation`、`requestId` 幂等、九态判断记录与「重启不重放」恢复语义也已搬过来。另外补了一道上游没有的闸：睡眠窗口内，其他插件推进会话的客人回合会在 `followup`/`steer` 入口被拦下（`quietBlockGuest`，默认开）。差异是本插件跑在 DSH 的宿主侧，用 `agents` 服务唤醒任意受管会话（冷会话会先恢复），而不是借助渠道插件的定时任务。
+节律语义对齐 AstrBot 的 `astrbot_plugin_autonomy`（上游原版 `whalelife-plugin-autonomy`）：掷骰、概率、自适应倍率、对外静默窗口（含跨夜与跨周）、意图台账、判断记录、面板手动触发，这些行为一一对应；上游的 `allowSelfWake`、`timezone`、`motivation`、`requestId` 幂等、九态判断记录与「重启不重放」恢复语义也已搬过来。另外补了一道上游没有的闸：对外静默窗口内，其他插件推进会话的客人回合会在 `followup`/`steer` 入口被拦下（`quietBlockGuest`，默认开）。差异是本插件跑在 DSH 的宿主侧，用 `agents` 服务唤醒任意受管会话（冷会话会先恢复），而不是借助渠道插件的定时任务。
 
 ## 安装
 
@@ -39,12 +39,12 @@ dsh plugin add <本仓库路径或包名>
 | `adaptive.recentMultiplier` | `0.15` | 刚聊过时概率乘数 |
 | `adaptive.distantMinutes` | `360` | 距上次活动超过此值视为"冷落已久" |
 | `adaptive.distantMultiplier` | `1.5` | 冷落已久时概率乘数 |
-| `sleepWindows` | `[]` | 如 `["23:00-08:00"]`；支持跨夜、多段，以及 `"23:00-08:00@5-1"` 这种「周五 23:00 → 周一 08:00」的跨周窗口（0=周日…6=周六） |
+| `quietWindows` | `[]` | 对外静默窗口，如 `["23:00-08:00"]`；支持跨夜、多段，以及 `"23:00-08:00@5-1"` 这种「周五 23:00 → 周一 08:00」的跨周窗口（0=周日…6=周六）。旧键名 `sleepWindows` 仍会被读取 |
 | `timezone` | `""` | 判断用的时区；留空用宿主时区 |
 | `allowSelfWake` | `true` | 是否允许模型用 `autonomy_schedule` 给自己排唤醒 |
 | `motivation` | `""` | 覆盖自主回合开场那段「决定做什么」的文案；留空用内置 |
-| `selfWakeDuringSleep` | `false` | 模型自排的唤醒是否允许落在睡眠窗口 |
-| `quietBlockGuest` | `true` | 睡眠窗口内丢掉别的插件推进来的「客人」回合（如 aurabot 群聊里的 @、引用、唤醒词命中）；主人、面板与其他插件照常放行 |
+| `selfWakeDuringSleep` | `false` | 模型自排的唤醒是否允许落在对外静默窗口 |
+| `quietBlockGuest` | `true` | 对外静默窗口内把别的插件推进来的「客人」回合换成一段静默提示（如 aurabot 群聊里的 @、引用、唤醒词命中）；主人、面板与其他插件照常放行 |
 | `maxRunsPerDay` | `20` | 每日判断次数上限，`0` 不限 |
 | `minIdleMinutes` | `0` | 距上次活动不足此值则不掷骰 |
 | `sessions` | `[]` | 目标会话；留空则管理全部根会话 |
@@ -56,8 +56,8 @@ dsh plugin add <本仓库路径或包名>
 pnpm test      # core 纯逻辑 + 宿主契约测试
 ```
 
-- `test/core.test.ts`：间隔抖动、概率（fixed/adaptive）、睡眠窗口（跨夜/跨周/坏配置）、意图状态机、判断记录状态机。
-- `test/contracts.test.ts`：`quiet-contract`（睡眠期不醒且不丢安排）、`queue-contract`（自排优先于随机、原子消耗、未命中照常推进时钟）、`daily-budget`、`recovery-contract`（重启时在飞的判断判中断不重放）、`settling`、`cancel-contract`。
+- `test/core.test.ts`：间隔抖动、概率（fixed/adaptive）、对外静默窗口（跨夜/跨周/坏配置）、意图状态机、判断记录状态机。
+- `test/contracts.test.ts`：`quiet-contract`（对外静默期不醒且不丢安排）、`queue-contract`（自排优先于随机、原子消耗、未命中照常推进时钟）、`daily-budget`、`recovery-contract`（重启时在飞的判断判中断不重放）、`settling`、`cancel-contract`。
 
 ## 工具
 

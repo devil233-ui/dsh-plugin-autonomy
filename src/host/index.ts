@@ -133,12 +133,12 @@ export function apply(ctx: Context): void {
   // by a short "stay silent" notice, so the pusher still gets its turn/end.
   const guards: Array<() => void> = [];
   const windowsLabel = (): string =>
-    config.sleepWindows.length === 0 ? 'unconfigured' : config.sleepWindows.join(', ');
+    config.quietWindows.length === 0 ? 'unconfigured' : config.quietWindows.join(', ');
   const sleepingNow = (): boolean => {
-    if (config.sleepWindows.length === 0) return false;
+    if (config.quietWindows.length === 0) return false;
     try {
       const zone = config.timezone !== '' ? config.timezone : timeZone;
-      return isSleepingAt(new Date(), parseSleepWindows(config.sleepWindows.join(',')), zone);
+      return isSleepingAt(new Date(), parseSleepWindows(config.quietWindows.join(',')), zone);
     } catch {
       return false;
     }

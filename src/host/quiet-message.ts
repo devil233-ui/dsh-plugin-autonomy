@@ -6,7 +6,7 @@
  * never produces that event, so the chat stays stuck and every later message
  * queues forever. Delivering a short "nothing to do here, end the turn"
  * message keeps the pusher's state machine intact while still keeping her
- * quiet inside the sleep window.
+ * quiet inside the quiet window.
  */
 
 import { createUserMessage, type UserMessage } from '@deepseek-ai/dsh-llm';
@@ -26,7 +26,7 @@ export interface QuietMessageInput {
 export function renderQuietText(input: QuietMessageInput): string {
   return [
     `[dsh-autonomy quiet ${input.sessionId}]`,
-    `A user turn from ${input.chat === undefined ? 'another chat' : `the ${input.chat} chat`} arrived while the sleep window (${input.windows}) is open.`,
+    `A user turn from ${input.chat === undefined ? 'another chat' : `the ${input.chat} chat`} arrived while the quiet window (${input.windows}) is open.`,
     'The owner asked this session to stay silent for anyone else during that window.',
     'Do not reply to it, do not call any tool for it, and do not mention that you were woken.',
     'End this turn immediately with no output.',

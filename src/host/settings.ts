@@ -34,7 +34,7 @@ export interface AutonomyConfig {
    * Quiet windows, comma separated `HH:mm-HH:mm` or `HH:mm-HH:mm@startDay-endDay`
    * (0=Sunday … 6=Saturday), e.g. `23:00-08:00@5-1` is Fri 23:00 → Mon 08:00.
    */
-  sleepWindows: string[];
+  quietWindows: string[];
   /** IANA zone used for every clock decision; empty means the host zone. */
   timezone: string;
   /** Whether the model may schedule its own wake with autonomy_schedule. */
@@ -44,7 +44,7 @@ export interface AutonomyConfig {
   /** Whether a self-scheduled wake may fire inside a sleep window. */
   selfWakeDuringSleep: boolean;
   /**
-   * Inside a sleep window, drop guest turns other plugins push into a session
+   * Inside a quiet window, replace guest turns other plugins push into a session
    * (an aurabot group @ / wake-word hit, for example). Turns from the owner,
    * from the panel and from other plugins keep flowing.
    */
@@ -74,7 +74,7 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
     distantMinutes: 360,
     distantMultiplier: 1.5,
   },
-  sleepWindows: [],
+  quietWindows: [],
   timezone: '',
   allowSelfWake: true,
   motivation: '',
@@ -123,12 +123,15 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
   const input = (raw ?? {}) as Record<string, unknown>;
   const adaptiveRaw = (input.adaptive ?? {}) as Record<string, unknown>;
   const mode = input.mode === 'adaptive' ? 'adaptive' : 'fixed';
-  const sleepWindows = stringArrayOr(input.sleepWindows, base.sleepWindows);
+  // `sleepWindows` was this key's name before 0.2; still read it so an
+  // existing config.json keeps working after the rename.
+  const rawWindows = input.quietWindows === undefined ? input.sleepWindows : input.quietWindows;
+  const quietWindows = stringArrayOr(rawWindows, base.quietWindows);
 
   // Reject a malformed window list outright instead of silently ignoring it:
   // a quiet-hours typo that turns into "always awake" is the failure mode an
   // operator notices last.
-  parseSleepWindows(sleepWindows.join(','));
+  parseSleepWindows(quietWindows.join(','));
 
   return {
     intervalMinutes: numberOr(input.intervalMinutes, base.intervalMinutes, 1, 24 * 60),
@@ -141,7 +144,7 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
       distantMinutes: numberOr(adaptiveRaw.distantMinutes, base.adaptive.distantMinutes, 1, 7 * 24 * 60),
       distantMultiplier: numberOr(adaptiveRaw.distantMultiplier, base.adaptive.distantMultiplier, 1, 10),
     },
-    sleepWindows,
+    quietWindows,
     timezone: zoneOr(input.timezone, base.timezone),
     allowSelfWake: booleanOr(input.allowSelfWake, base.allowSelfWake),
     motivation: textOr(input.motivation, base.motivation),

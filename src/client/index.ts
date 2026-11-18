@@ -42,7 +42,7 @@ interface ConfigView {
     distantMinutes: number;
     distantMultiplier: number;
   };
-  sleepWindows: string[];
+  quietWindows: string[];
   timezone: string;
   allowSelfWake: boolean;
   motivation: string;
@@ -243,7 +243,7 @@ export function apply(ctx: Context): void {
       const patch: Record<string, unknown> = {};
       for (const [key, raw] of Object.entries(draft)) {
         if (raw.trim() === '') continue;
-        if (key === 'sleepWindows' || key === 'sessions') {
+        if (key === 'quietWindows' || key === 'sessions') {
           patch[key] = raw.split(',').map((part) => part.trim()).filter((part) => part !== '');
         } else if (key === 'mode') {
           patch[key] = raw.trim();
@@ -286,14 +286,14 @@ export function apply(ctx: Context): void {
         field('jitterRatio', '抖动比例（0.1 = ±10%）', config?.jitterRatio ?? 0.1, true),
         field('probability', '唤醒概率（0-1）', config?.probability ?? 0.2, true),
         field('mode', '概率模式（fixed / adaptive）', config?.mode ?? 'fixed'),
-        field('sleepWindows', '睡眠时段（HH:mm-HH:mm 或 23:00-08:00@5-1，逗号分隔）', (config?.sleepWindows ?? []).join(',')),
+        field('quietWindows', '对外静默（这段内别人叫不醒她；HH:mm-HH:mm 或 23:00-08:00@5-1，逗号分隔）', (config?.quietWindows ?? []).join(',')),
         field('maxRunsPerDay', '每日上限（0 = 不限）', config?.maxRunsPerDay ?? 20, true),
         field('minIdleMinutes', '最近活动后跳过（分钟）', config?.minIdleMinutes ?? 0, true),
         field('sessions', '目标会话（留空 = 全部根会话）', (config?.sessions ?? []).join(',')),
         field('timezone', '时区（留空 = 宿主时区）', config?.timezone ?? ''),
         field('allowSelfWake', '允许她自排唤醒（true / false）', String(config?.allowSelfWake ?? true)),
         field('motivation', '自主回合开场白（留空 = 内置）', config?.motivation ?? ''),
-        field('quietBlockGuest', '睡眠窗内拦下客人回合（true / false）', String(config?.quietBlockGuest ?? true)),
+        field('quietBlockGuest', '对外静默期内拦下客人回合（true / false）', String(config?.quietBlockGuest ?? true)),
         field('enabled', '启用（true / false）', String(config?.enabled ?? true)),
       ),
       h!('div', { className: 'dsh-autonomy-row' },
@@ -328,7 +328,7 @@ export function apply(ctx: Context): void {
             + ` · 下次掷骰 ${fmtTime(activeRow.nextCheckAt)}`
             + ` · 上次活动 ${fmtTime(activeRow.lastActivityAt)}`
             + (activeRow.selfWake === null ? '' : ` · 自排 ${fmtTime(activeRow.selfWake.at)}`)
-            + (activeRow.suppressedTurns > 0 ? ` · 睡眠期已拦 ${activeRow.suppressedTurns} 条` : '')),
+            + (activeRow.suppressedTurns > 0 ? ` · 对外静默期挡下 ${activeRow.suppressedTurns} 条` : '')),
       ),
 
       h!('div', { className: 'dsh-autonomy-section' },
