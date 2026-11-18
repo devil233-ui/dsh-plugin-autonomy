@@ -12,6 +12,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis';
+import * as ReactNS from 'react';
 import type { ReactElement } from 'react';
 
 const PLUGIN_ID = 'dsh-autonomy';
@@ -135,27 +136,27 @@ function fmtTime(epoch: number): string {
 
 export function apply(ctx: Context): void {
   injectStyle();
-  const React = (ctx as unknown as { get(name: string): unknown }).get('react') as ReactModule | undefined;
-  // The host hands React to client bundles through the module loader; when it
-  // is not reachable the card falls back to a text notice instead of crashing.
-  const h = React?.createElement;
+  // React arrives through the loader-provided `require`; the bundle stays
+  // externalized, so `react` here is the host's own copy.
+  const React = ReactNS as unknown as ReactModule;
+  const h = React.createElement;
   if (h === undefined) {
     console.error('[dsh-autonomy] react unavailable; settings card not mounted');
     return;
   }
 
   function AutonomyCard(): ReactElement {
-    const [snapshot, setSnapshot] = React!.useState<Snapshot | null>(null);
-    const [error, setError] = React!.useState<string | null>(null);
-    const [sessionId, setSessionId] = React!.useState('');
-    const [busy, setBusy] = React!.useState(false);
-    const [draft, setDraft] = React!.useState<Record<string, string>>({});
-    const [intentText, setIntentText] = React!.useState('');
-    const [intentKind, setIntentKind] = React!.useState('thought');
+    const [snapshot, setSnapshot] = React.useState<Snapshot | null>(null);
+    const [error, setError] = React.useState<string | null>(null);
+    const [sessionId, setSessionId] = React.useState('');
+    const [busy, setBusy] = React.useState(false);
+    const [draft, setDraft] = React.useState<Record<string, string>>({});
+    const [intentText, setIntentText] = React.useState('');
+    const [intentKind, setIntentKind] = React.useState('thought');
 
     const query = (): string => (sessionId === '' ? '' : `?session=${encodeURIComponent(sessionId)}`);
 
-    const pull = React!.useCallback(async () => {
+    const pull = React.useCallback(async () => {
       try {
         const response = await fetch(`${STATE_URL}${query()}`, { cache: 'no-store' });
         if (!response.ok) throw new Error(`state ${response.status}`);
@@ -166,7 +167,7 @@ export function apply(ctx: Context): void {
       }
     }, [sessionId]);
 
-    const act = React!.useCallback(async (body: Record<string, unknown>) => {
+    const act = React.useCallback(async (body: Record<string, unknown>) => {
       setBusy(true);
       try {
         const response = await fetch(`${ACTION_URL}${query()}`, {
@@ -188,11 +189,19 @@ export function apply(ctx: Context): void {
       }
     }, [sessionId]);
 
-    React!.useEffect(() => {
+    React.useEffect(() => {
       void pull();
     }, [pull]);
 
-    React!.useEffect(() => {
+    // Select the first supervised session once, so the buttons work without
+    // the operator having to paste an id.
+    React.useEffect(() => {
+      if (sessionId !== '' || snapshot === null) return;
+      const first = snapshot.sessions[0];
+      if (first !== undefined) setSessionId(first.sessionId);
+    }, [snapshot, sessionId]);
+
+    React.useEffect(() => {
       if (typeof EventSource === 'undefined') return undefined;
       const source = new EventSource(EVENTS_URL);
       const onChanged = (): void => {

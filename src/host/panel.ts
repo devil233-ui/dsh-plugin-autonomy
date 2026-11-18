@@ -162,7 +162,13 @@ export class PanelService {
     const now = Date.now();
     const config = this.#deps.getConfig();
     const managed = new Set(this.#deps.scheduler.managedSessions());
-    const ids = new Set<string>([...managed, ...(focus === undefined ? [] : [focus])]);
+    // Cold sessions keep their history: a run recorded weeks ago must still be
+    // visible even when nothing is live right now.
+    const ids = new Set<string>([
+      ...managed,
+      ...this.#deps.state.sessionIds(),
+      ...(focus === undefined ? [] : [focus]),
+    ]);
     const sessions: SessionRow[] = [];
     for (const sessionId of ids) {
       const state = this.#deps.state.session(sessionId, now);
@@ -179,14 +185,24 @@ export class PanelService {
         runs: [...state.runs].reverse().slice(0, 20),
       });
     }
-    sessions.sort((a, b) => a.sessionId.localeCompare(b.sessionId));
+    // Sessions that have actually been judged are the interesting ones; the
+    // panel picks the first row by default, so rank by recent runs first.
+    sessions.sort((a, b) => {
+      const activityA = a.runs.length > 0 ? a.lastActivityAt : 0;
+      const activityB = b.runs.length > 0 ? b.lastActivityAt : 0;
+      if (activityA !== activityB) return activityB - activityA;
+      return a.sessionId.localeCompare(b.sessionId);
+    });
     return { now, timeZone: this.#deps.timeZone, dataDir: this.#deps.dataDir, config, sessions };
   }
 
   async action(raw: unknown, focus?: string): Promise<{ ok: true; snapshot: PanelSnapshot } | { ok: false; error: { code: string; message: string } }> {
     const body = (raw ?? {}) as Record<string, unknown>;
     const type = typeof body['type'] === 'string' ? body['type'] : '';
-    const target = typeof body['sessionId'] === 'string' && body['sessionId'] !== '' ? body['sessionId'] : focus;
+    // A card that has not picked a session yet should still work: fall back to
+    // the operator-supplied focus, then to the first supervised session.
+    const requested = typeof body['sessionId'] === 'string' && body['sessionId'] !== '' ? body['sessionId'] : undefined;
+    const target = requested ?? focus ?? this.#deps.scheduler.managedSessions()[0];
     const now = Date.now();
 
     try {

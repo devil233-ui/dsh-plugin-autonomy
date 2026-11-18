@@ -267,11 +267,17 @@ export class Scheduler {
       })),
     });
 
-    const finishedAt = now + 1;
+    const finishedAt = this.#now();
     this.#deps.state.update(sessionId, (state) => {
       const index = state.runs.findIndex((entry) => entry.id === runId);
       if (index < 0) return;
       const current = state.runs[index] as RunRecord;
+      // The agent can end the turn itself with autonomy_finish; its own account
+      // outranks anything inferred from the event log, so keep it.
+      if (current.status === 'completed') {
+        state.lastActivityAt = finishedAt;
+        return;
+      }
       if (outcome.status === 'ok' && outcome.observation !== undefined) {
         state.runs[index] = settleRun(
           current,

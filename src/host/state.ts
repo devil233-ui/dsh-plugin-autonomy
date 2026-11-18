@@ -109,6 +109,11 @@ export class StateStore {
     return this.#state;
   }
 
+  /** Every session that has ever been recorded, live or cold. */
+  sessionIds(): string[] {
+    return Object.keys(this.#state.sessions);
+  }
+
   session(sessionId: string, createWith?: number): SessionState | undefined {
     const existing = this.#state.sessions[sessionId];
     if (existing !== undefined) return existing;

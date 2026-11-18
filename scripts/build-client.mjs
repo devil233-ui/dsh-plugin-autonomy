@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PLUGIN_ID = 'dsh-autonomy';
+const PLUGIN_ID = 'dsh-plugin-autonomy';
 
 const result = await build({
   entryPoints: [resolve(root, 'src/client/index.ts')],
