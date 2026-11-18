@@ -78,6 +78,7 @@ interface SessionRow {
   lastActivityAt: number;
   nextCheckAt: number;
   selfWake: { at: number; note?: string } | null;
+  lastSelfWake: { at: number; note?: string; firedAt: number } | null;
   openIntents: IntentRow[];
   settledIntents: IntentRow[];
   runs: RunRow[];
@@ -317,6 +318,32 @@ export function apply(ctx: Context): void {
             + ` · 下次掷骰 ${fmtTime(activeRow.nextCheckAt)}`
             + ` · 上次活动 ${fmtTime(activeRow.lastActivityAt)}`
             + (activeRow.selfWake === null ? '' : ` · 自排 ${fmtTime(activeRow.selfWake.at)}`)),
+      ),
+
+      h!('div', { className: 'dsh-autonomy-section' },
+        h!('div', { className: 'dsh-autonomy-section-head' },
+          h!('span', { className: 'dsh-autonomy-label' }, '她的排程'),
+          h!('span', { className: 'dsh-autonomy-meta' },
+            activeRow === undefined
+              ? '未选中会话'
+              : (activeRow.selfWake === null ? '当前没有待触发的自排唤醒' : '有 1 条待触发的自排唤醒')),
+        ),
+        activeRow === undefined
+          ? null
+          : h!('div', {},
+            h!('div', { className: 'dsh-autonomy-meta' }, `下一次随机掷骰：${fmtTime(activeRow.nextCheckAt)}`),
+            activeRow.selfWake === null
+              ? h!('div', { className: 'dsh-autonomy-empty' },
+                activeRow.lastSelfWake === null
+                  ? '她还没给自己排过唤醒。她在自主判断里调用 autonomy_schedule 之后，这里会显示时间与原因。'
+                  : `最近一次自排：原定 ${fmtTime(activeRow.lastSelfWake.at)}，已于 ${fmtTime(activeRow.lastSelfWake.firedAt)} 触发（原因：${activeRow.lastSelfWake.note ?? '未填'}）`)
+              : h!('div', { className: 'dsh-autonomy-row' },
+                h!('span', { className: 'dsh-autonomy-meta' },
+                  `她自己排的：${fmtTime(activeRow.selfWake.at)}`
+                  + (activeRow.selfWake.note === undefined ? '' : ` · ${activeRow.selfWake.note}`)),
+                h!('button', { className: 'dsh-autonomy-btn', disabled: busy, onClick: () => void act({ type: 'cancel-self' }) }, '取消这条'),
+              ),
+          ),
       ),
 
       h!('div', { className: 'dsh-autonomy-section' },

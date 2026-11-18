@@ -180,8 +180,12 @@ export class Scheduler {
     }
 
     if (dueSelfWake) {
-      const note = state.selfWake?.note;
+      const pending = state.selfWake;
+      const note = pending?.note;
       this.#deps.state.update(sessionId, (session) => {
+        if (pending !== undefined) {
+          session.lastSelfWake = { ...pending, firedAt: now };
+        }
         delete session.selfWake;
         session.nextCheckAt = now + this.#wait(config);
       });

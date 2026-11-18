@@ -32,6 +32,12 @@ export interface SessionState {
   /** When the next dice roll is due. */
   nextCheckAt: number;
   selfWake?: SelfWake;
+  /**
+   * The most recent self-scheduled wake that actually fired. Kept only so the
+   * panel can still say "she scheduled this herself" after the pending entry is
+   * consumed; scheduling itself always reads `selfWake`.
+   */
+  lastSelfWake?: SelfWake & { firedAt: number };
   intents: Intent[];
   runs: RunRecord[];
   /** Local date (`YYYY-MM-DD`) the daily counter belongs to. */
