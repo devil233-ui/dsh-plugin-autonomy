@@ -43,6 +43,9 @@ interface ConfigView {
     distantMultiplier: number;
   };
   sleepWindows: string[];
+  timezone: string;
+  allowSelfWake: boolean;
+  motivation: string;
   selfWakeDuringSleep: boolean;
   maxRunsPerDay: number;
   minIdleMinutes: number;
@@ -241,7 +244,7 @@ export function apply(ctx: Context): void {
           patch[key] = raw.split(',').map((part) => part.trim()).filter((part) => part !== '');
         } else if (key === 'mode') {
           patch[key] = raw.trim();
-        } else if (key === 'enabled' || key === 'selfWakeDuringSleep') {
+        } else if (key === 'enabled' || key === 'selfWakeDuringSleep' || key === 'allowSelfWake') {
           patch[key] = raw.trim() === 'true';
         } else {
           const number = Number(raw);
@@ -280,10 +283,13 @@ export function apply(ctx: Context): void {
         field('jitterRatio', '抖动比例（0.1 = ±10%）', config?.jitterRatio ?? 0.1, true),
         field('probability', '唤醒概率（0-1）', config?.probability ?? 0.2, true),
         field('mode', '概率模式（fixed / adaptive）', config?.mode ?? 'fixed'),
-        field('sleepWindows', '睡眠时段（HH:mm-HH:mm, 逗号分隔）', (config?.sleepWindows ?? []).join(',')),
+        field('sleepWindows', '睡眠时段（HH:mm-HH:mm 或 23:00-08:00@5-1，逗号分隔）', (config?.sleepWindows ?? []).join(',')),
         field('maxRunsPerDay', '每日上限（0 = 不限）', config?.maxRunsPerDay ?? 20, true),
         field('minIdleMinutes', '最近活动后跳过（分钟）', config?.minIdleMinutes ?? 0, true),
         field('sessions', '目标会话（留空 = 全部根会话）', (config?.sessions ?? []).join(',')),
+        field('timezone', '时区（留空 = 宿主时区）', config?.timezone ?? ''),
+        field('allowSelfWake', '允许她自排唤醒（true / false）', String(config?.allowSelfWake ?? true)),
+        field('motivation', '自主回合开场白（留空 = 内置）', config?.motivation ?? ''),
         field('enabled', '启用（true / false）', String(config?.enabled ?? true)),
       ),
       h!('div', { className: 'dsh-autonomy-row' },

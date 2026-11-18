@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Intent } from '../core/intent.js';
-import { isOpen } from '../core/intent.js';
+import { isOpen, isOverdue } from '../core/intent.js';
 import {
   isSleepingAt,
   minutesOfDay,
@@ -21,7 +21,7 @@ import {
   type SleepWindow,
 } from '../core/schedule.js';
 import type { RunRecord, RunTrigger } from '../core/run.js';
-import { createRun, settleRun, startRun } from '../core/run.js';
+import { createRun, isTerminal, markInterrupted, markSettling, settleRun, startRun } from '../core/run.js';
 import { localDay, type StateStore } from './state.js';
 import { lastActivityEpoch } from './observer.js';
 import { sessionLogOf, type AgentsFacade } from './types.js';
@@ -60,6 +60,7 @@ export class Scheduler {
   start(): void {
     if (this.#started) return;
     this.#started = true;
+    this.recoverInterrupted();
     this.#stopped = false;
     this.#timer = setInterval(() => {
       void this.tick();
@@ -94,6 +95,41 @@ export class Scheduler {
     return Date.now();
   }
 
+  /** Effective zone: the configured one when set, else the host's. */
+  #timeZone(config: AutonomyConfig): string {
+    return config.timezone !== '' ? config.timezone : this.#deps.timeZone;
+  }
+
+  /**
+   * A run that was `running` or `settling` when the host went down is judged
+   * interrupted and never replayed — same contract as whalelife's recovery.
+   */
+  recoverInterrupted(now = this.#now()): number {
+    let touched = 0;
+    for (const sessionId of this.#deps.state.sessionIds()) {
+      this.#deps.state.update(sessionId, (state) => {
+        state.runs = state.runs.map((run) => {
+          if (isTerminal(run.status)) return run;
+          if (run.status !== 'running' && run.status !== 'settling') return run;
+          touched += 1;
+          return markInterrupted(run, 'host restarted while this judgement was in flight', new Date(now));
+        });
+      }, now);
+    }
+    if (touched > 0) this.#deps.logger.warn(`dsh-autonomy: marked ${touched} in-flight judgement(s) as interrupted`);
+    return touched;
+  }
+
+  /** Flip a live run to `settling` while its verdict is still unknown. */
+  markSettling(sessionId: string, runId: string): void {
+    this.#deps.state.update(sessionId, (state) => {
+      const index = state.runs.findIndex((entry) => entry.id === runId);
+      if (index < 0) return;
+      state.runs[index] = markSettling(state.runs[index] as RunRecord);
+    });
+    this.#deps.onChange?.();
+  }
+
   #windows(config: AutonomyConfig): SleepWindow[] {
     const raw = config.sleepWindows.join(',');
     if (this.#windowsCache !== undefined && this.#windowsCache.raw === raw) return this.#windowsCache.windows;
@@ -105,7 +141,7 @@ export class Scheduler {
   #inSleepWindow(now: number, config: AutonomyConfig): boolean {
     const windows = this.#windows(config);
     if (windows.length === 0) return false;
-    return isSleepingAt(new Date(now), windows, this.#deps.timeZone);
+    return isSleepingAt(new Date(now), windows, this.#timeZone(config));
   }
 
   #wait(config: AutonomyConfig): number {
@@ -243,6 +279,7 @@ export class Scheduler {
 
   async #run(sessionId: string, trigger: RunTrigger, note?: string): Promise<WakeOutcome> {
     const now = this.#now();
+    const config = this.#deps.config();
     const runId = newRunId();
     const run = createRun({ sessionId, trigger, ...(note === undefined ? {} : { note }) }, new Date(now), () => runId);
 
@@ -268,7 +305,9 @@ export class Scheduler {
         text: intent.text,
         kind: intent.kind,
         ...(intent.dueAt === undefined ? {} : { dueAt: intent.dueAt }),
+        ...(isOverdue(intent, new Date(now)) ? { overdue: true } : {}),
       })),
+      ...(config.motivation.trim() === '' ? {} : { motivation: config.motivation }),
     });
 
     const finishedAt = this.#now();

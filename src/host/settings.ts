@@ -30,8 +30,17 @@ export interface AutonomyConfig {
   probability: number;
   mode: ProbabilityInput['mode'];
   adaptive: AdaptiveConfig;
-  /** Quiet windows in `HH:mm-HH:mm` form, comma separated. */
+  /**
+   * Quiet windows, comma separated `HH:mm-HH:mm` or `HH:mm-HH:mm@startDay-endDay`
+   * (0=Sunday … 6=Saturday), e.g. `23:00-08:00@5-1` is Fri 23:00 → Mon 08:00.
+   */
   sleepWindows: string[];
+  /** IANA zone used for every clock decision; empty means the host zone. */
+  timezone: string;
+  /** Whether the model may schedule its own wake with autonomy_schedule. */
+  allowSelfWake: boolean;
+  /** Overrides the paragraph the model reads at the start of an autonomous turn. */
+  motivation: string;
   /** Whether a self-scheduled wake may fire inside a sleep window. */
   selfWakeDuringSleep: boolean;
   /** Hard ceiling on judgement runs per session per local day. */
@@ -60,6 +69,9 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
     distantMultiplier: 1.5,
   },
   sleepWindows: [],
+  timezone: '',
+  allowSelfWake: true,
+  motivation: '',
   selfWakeDuringSleep: false,
   maxRunsPerDay: 20,
   minIdleMinutes: 0,
@@ -76,6 +88,22 @@ function numberOr(value: unknown, fallback: number, min: number, max: number): n
 
 function booleanOr(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+function zoneOr(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const zone = value.trim();
+  if (zone === '') return '';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return zone;
+  } catch {
+    return fallback;
+  }
+}
+
+function textOr(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value.trim() : fallback;
 }
 
 function stringArrayOr(value: unknown, fallback: string[]): string[] {
@@ -107,6 +135,9 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
       distantMultiplier: numberOr(adaptiveRaw.distantMultiplier, base.adaptive.distantMultiplier, 1, 10),
     },
     sleepWindows,
+    timezone: zoneOr(input.timezone, base.timezone),
+    allowSelfWake: booleanOr(input.allowSelfWake, base.allowSelfWake),
+    motivation: textOr(input.motivation, base.motivation),
     selfWakeDuringSleep: booleanOr(input.selfWakeDuringSleep, base.selfWakeDuringSleep),
     maxRunsPerDay: Math.round(numberOr(input.maxRunsPerDay, base.maxRunsPerDay, 0, 500)),
     minIdleMinutes: numberOr(input.minIdleMinutes, base.minIdleMinutes, 0, 24 * 60),

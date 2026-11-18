@@ -20,7 +20,7 @@ import { createIntent, reviseIntent, settleIntent, isOpen, remindAt } from '../c
 import { settleRun } from '../core/run.js';
 import type { AutonomyConfig } from './settings.js';
 import type { Scheduler } from './scheduler.js';
-import type { StateStore } from './state.js';
+import { MAX_SEEN_REQUESTS, type SessionState, type StateStore } from './state.js';
 
 export interface ToolServices {
   config(): AutonomyConfig;
@@ -65,6 +65,12 @@ function parseLocalDateTime(text: string): string | null {
   return date.toISOString();
 }
 
+/** Append a requestId to the bounded idempotency ring. */
+function rememberRequest(state: SessionState, requestId: string): string[] {
+  const seen = [...(state.seenRequests ?? []), requestId];
+  return seen.slice(-MAX_SEEN_REQUESTS);
+}
+
 function newIntentId(): string {
   return `i${Math.random().toString(16).slice(2, 10)}`;
 }
@@ -82,6 +88,16 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         at: { type: 'string', description: 'set only: local wall-clock time formatted YYYY-MM-DDTHH:MM (must be in the future).' },
         in_minutes: { type: 'integer', description: 'set only: alternative to at — wake this many minutes from now.' },
         note: { type: 'string', description: 'set only: one line explaining why; it is carried into the wake prompt.' },
+        version: {
+          type: 'integer',
+          description:
+            'set/cancel: the self_wake_version you read with action=get. A stale version is refused instead of overwriting a newer schedule.',
+        },
+        requestId: {
+          type: 'string',
+          description:
+            'set/cancel: a stable id for this exact operation. Re-sending the same requestId is a no-op, so a retried tool call cannot reschedule.',
+        },
       },
       output: { schema: { type: 'object', additionalProperties: true }, render: renderValue },
       async execute(args) {
@@ -94,24 +110,63 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
           return json({
             session_id: sessionId,
             self_wake: state?.selfWake ?? null,
+            self_wake_version: state?.selfWakeVersion ?? 0,
             next_automatic_check_at: state?.nextCheckAt ?? null,
             interval_minutes: config.intervalMinutes,
             probability: config.probability,
             mode: config.mode,
             enabled: config.enabled,
+            allow_self_wake: config.allowSelfWake,
+            timezone: config.timezone === '' ? 'host default' : config.timezone,
+            sleep_windows: config.sleepWindows,
+            self_wake_during_sleep: config.selfWakeDuringSleep,
           });
         }
 
+        if (action !== 'set' && action !== 'cancel') return json({ error: `unknown action ${action}` });
+
+        // Idempotency first: a retried call must not touch anything.
+        const requestId = str(args['requestId']).trim();
+        const snapshot = services.state.session(sessionId, now);
+        if (requestId !== '' && (snapshot?.seenRequests ?? []).includes(requestId)) {
+          return json({
+            session_id: sessionId,
+            duplicate: true,
+            note: 'this requestId was already applied; nothing changed',
+            self_wake: snapshot?.selfWake ?? null,
+            self_wake_version: snapshot?.selfWakeVersion ?? 0,
+          });
+        }
+
+        // Optimistic concurrency: a stale version means the model is looking at
+        // an older schedule than the one on disk.
+        const version = args['version'];
+        if (typeof version === 'number' && Number.isFinite(version)) {
+          const current = snapshot?.selfWakeVersion ?? 0;
+          if (Math.round(version) !== current) {
+            return json({
+              error: `version mismatch: current ${current}, got ${Math.round(version)}; call action=get and retry`,
+            });
+          }
+        }
+
         if (action === 'cancel') {
+          if (!config.allowSelfWake) {
+            return json({ error: 'self-scheduled wakes are disabled by the operator (allowSelfWake=false)' });
+          }
           let had = false;
           services.state.update(sessionId, (state) => {
             had = state.selfWake !== undefined;
             delete state.selfWake;
+            state.selfWakeVersion = (state.selfWakeVersion ?? 0) + 1;
+            if (requestId !== '') state.seenRequests = rememberRequest(state, requestId);
           }, now);
           return json({ session_id: sessionId, cancelled: had });
         }
 
-        if (action !== 'set') return json({ error: `unknown action ${action}` });
+        if (!config.allowSelfWake) {
+          return json({ error: 'self-scheduled wakes are disabled by the operator (allowSelfWake=false)' });
+        }
 
         const at = str(args['at']);
         const inMinutes = args['in_minutes'];
@@ -130,9 +185,15 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         const entry = { at: atMs, ...(note === '' ? {} : { note }) };
         services.state.update(sessionId, (state) => {
           state.selfWake = entry;
+          state.selfWakeVersion = (state.selfWakeVersion ?? 0) + 1;
+          if (requestId !== '') state.seenRequests = rememberRequest(state, requestId);
         }, now);
         services.scheduler.ensureScheduled(sessionId, now);
-        return json({ session_id: sessionId, self_wake: entry });
+        return json({
+          session_id: sessionId,
+          self_wake: entry,
+          self_wake_version: (services.state.session(sessionId, now)?.selfWakeVersion ?? 0),
+        });
       },
       presentCall: (callArgs) => presentCard('Autonomy schedule', str((callArgs as { action?: unknown })['action'])),
     }),

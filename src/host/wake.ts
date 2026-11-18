@@ -28,7 +28,9 @@ export interface WakeRequest {
   runId: string;
   trigger: WakeTrigger;
   note?: string;
-  openIntents: readonly { text: string; kind: string; dueAt?: string }[];
+  openIntents: readonly { text: string; kind: string; dueAt?: string; overdue?: boolean }[];
+  /** Config override for the "decide what to do" paragraph. */
+  motivation?: string;
 }
 
 export interface WakeDeps {
@@ -36,6 +38,12 @@ export interface WakeDeps {
   timeZone: string;
   /** Upper bound on one autonomous turn before the plugin stops waiting. */
   maxTurnMs?: number;
+  /**
+   * Called once the turn has been claimed and the plugin starts waiting for it
+   * to settle, so the run can be marked `settling` while its verdict is still
+   * unknown. A restart in this window must not replay the turn.
+   */
+  onPhase?: (sessionId: string, runId: string, phase: "settling") => void;
   logger: { warn(message: string): void; error?(message: string): void };
 }
 
@@ -83,6 +91,9 @@ export class WakeDriver {
       ...(request.note === undefined ? {} : { note: request.note }),
       openIntents: request.openIntents,
       timeZone: this.#deps.timeZone,
+      ...(request.motivation === undefined || request.motivation.trim() === ""
+        ? {}
+        : { motivation: request.motivation }),
     });
 
     let claimed = false;
@@ -102,6 +113,8 @@ export class WakeDriver {
       };
     }
     if (!claimed) return { status: 'busy', sessionId: request.sessionId };
+
+    this.#deps.onPhase?.(request.sessionId, request.runId, 'settling');
 
     const maxTurnMs = this.#deps.maxTurnMs ?? DEFAULT_MAX_TURN_MS;
     let timedOut = false;

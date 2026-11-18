@@ -27,8 +27,10 @@ export interface FramingInput {
   /** Why this roll woke the session (probability value, self-note, …). */
   note?: string;
   /** Open intents rendered into the prompt so the model need not re-read them. */
-  openIntents: readonly { text: string; kind: string; dueAt?: string }[];
+  openIntents: readonly { text: string; kind: string; dueAt?: string; overdue?: boolean }[];
   timeZone: string;
+  /** Replaces the built-in "decide what to do" paragraph when non-empty. */
+  motivation?: string;
 }
 
 /**
@@ -46,7 +48,14 @@ export function autonomyNoticeSource(summary: string): UserMessage['source'] {
 
 function intentLine(intent: FramingInput['openIntents'][number], timeZone: string): string {
   const parts = [`- [${intent.kind}] ${intent.text}`];
-  if (intent.dueAt !== undefined) parts.push(`(due ${formatLocalStamp(new Date(intent.dueAt), timeZone)})`);
+  if (intent.dueAt !== undefined) {
+    const stamp = formatLocalStamp(new Date(intent.dueAt), timeZone);
+    parts.push(
+      intent.overdue === true
+        ? `(was due ${stamp}; that time has passed and it is still open)`
+        : `(due ${stamp})`,
+    );
+  }
   return parts.join(' ');
 }
 
@@ -64,10 +73,15 @@ export function renderFramingText(input: FramingInput): string {
     for (const intent of input.openIntents.slice(0, 8)) lines.push(intentLine(intent, input.timeZone));
   }
   lines.push('');
-  lines.push('Decide what to do with this moment:');
-  lines.push('- speak to the user if there is something genuinely worth saying;');
-  lines.push('- act on something useful (a task, a file, a check) if that is better;');
-  lines.push('- or do nothing, which is a valid and expected outcome.');
+  const motivation = input.motivation?.trim() ?? '';
+  if (motivation !== '') {
+    lines.push(motivation);
+  } else {
+    lines.push('Decide what to do with this moment:');
+    lines.push('- speak to the user if there is something genuinely worth saying;');
+    lines.push('- act on something useful (a task, a file, a check) if that is better;');
+    lines.push('- or do nothing, which is a valid and expected outcome.');
+  }
   lines.push(
     'You may also record an intent for later with autonomy_intents, or schedule your own wake with autonomy_schedule.',
   );

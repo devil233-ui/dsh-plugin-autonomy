@@ -8,10 +8,27 @@
 /** 一次等待的下限：再短的间隔也不至于把宿主叫成忙线。 */
 export const MIN_WAIT_MS = 60_000;
 
-/** 一个睡眠时段，`HH:mm` 表示本地时钟；start > end 表示跨夜。 */
+/**
+ * 一个睡眠时段，`HH:mm` 表示本地时钟；start > end 表示跨夜。
+ *
+ * 带 startDay/endDay（0=周日 … 6=周六）时表示"从周几几点到周几几点"，
+ * 支持跨周（如周五 23:00 → 周一 08:00）。两者缺省即每天同一段。
+ */
 export interface SleepWindow {
   start: string;
   end: string;
+  startDay?: number;
+  endDay?: number;
+}
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
+
+/** `now` 在指定时区里是周几（0=周日 … 6=周六）。 */
+export function weekdayIndex(now: Date, timeZone: string): number {
+  const name = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(now);
+  return WEEKDAY_INDEX[name] ?? 0;
 }
 
 /** 自适应概率的四个旋钮：离上次活动近则降低，久则提高。 */
@@ -48,7 +65,10 @@ export function parseHhMm(raw: string): number | null {
 }
 
 /**
- * 解析 `HH:mm-HH:mm,HH:mm-HH:mm` 形式的睡眠时段。
+ * 解析 `HH:mm-HH:mm[,HH:mm-HH:mm…]` 形式的睡眠时段。
+ *
+ * 每段可带 `@startDay-endDay` 后缀（0=周日 … 6=周六；7 视作周日），
+ * 例如 `23:00-08:00@5-1` 是"周五 23:00 到周一 08:00"。
  * 非法片段直接跳过（宁可少一段睡眠，也不因一条坏配置让插件拒绝启动）。
  */
 export function parseSleepWindows(raw: string): SleepWindow[] {
@@ -56,14 +76,43 @@ export function parseSleepWindows(raw: string): SleepWindow[] {
   for (const chunk of raw.split(",")) {
     const segment = chunk.trim();
     if (segment === "") continue;
-    const dash = segment.indexOf("-");
+
+    const [clockPart = "", dayPart] = segment.split("@");
+    const dash = clockPart.indexOf("-");
     if (dash <= 0) continue;
-    const start = segment.slice(0, dash).trim();
-    const end = segment.slice(dash + 1).trim();
+    const start = clockPart.slice(0, dash).trim();
+    const end = clockPart.slice(dash + 1).trim();
     if (parseHhMm(start) === null || parseHhMm(end) === null) continue;
-    windows.push({ start, end });
+
+    const window: SleepWindow = { start, end };
+    if (dayPart !== undefined) {
+      const days = parseDayRange(dayPart.trim());
+      if (days === null) continue;
+      window.startDay = days[0];
+      window.endDay = days[1];
+    }
+    windows.push(window);
   }
   return windows;
+}
+
+/** `1-5` → [1,5]；单个 `1` → [1,1]；非法返回 null。 */
+function parseDayRange(raw: string): [number, number] | null {
+  const pick = (text: string): number | null => {
+    if (!/^\d$/.test(text)) return null;
+    const value = Number(text);
+    // 只接受 0-6（周日…周六）与 7（等同周日），其余一律当坏配置。
+    if (!Number.isInteger(value) || value < 0 || value > 7) return null;
+    return value % 7;
+  };
+  const dash = raw.indexOf("-");
+  if (dash < 0) {
+    const only = pick(raw);
+    return only === null ? null : [only, only];
+  }
+  const start = pick(raw.slice(0, dash).trim());
+  const end = pick(raw.slice(dash + 1).trim());
+  return start === null || end === null ? null : [start, end];
 }
 
 /**
@@ -121,13 +170,31 @@ export function minutesOfDay(now: Date, timeZone: string): number {
 export function isSleepingAt(now: Date, windows: readonly SleepWindow[], timeZone: string): boolean {
   if (windows.length === 0) return false;
   const current = minutesOfDay(now, timeZone);
+  const day = weekdayIndex(now, timeZone);
   for (const window of windows) {
     const start = parseHhMm(window.start);
     const end = parseHhMm(window.end);
     if (start === null || end === null || start === end) continue;
-    if (start < end) {
-      if (current >= start && current < end) return true;
-    } else if (current >= start || current < end) {
+
+    if (window.startDay === undefined && window.endDay === undefined) {
+      // 每天同一段：只在当日时钟上判断。
+      if (start < end) {
+        if (current >= start && current < end) return true;
+      } else if (current >= start || current < end) {
+        return true;
+      }
+      continue;
+    }
+
+    // 带星期的窗口按"周内分钟"判断，因此能表达跨周的长窗口。
+    const startDay = window.startDay ?? window.endDay ?? day;
+    const endDay = window.endDay ?? window.startDay ?? day;
+    const startIndex = startDay * 1440 + start;
+    const endIndex = endDay * 1440 + end;
+    const nowIndex = day * 1440 + current;
+    if (startIndex <= endIndex) {
+      if (nowIndex >= startIndex && nowIndex < endIndex) return true;
+    } else if (nowIndex >= startIndex || nowIndex < endIndex) {
       return true;
     }
   }

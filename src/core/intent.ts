@@ -157,6 +157,16 @@ export function isOpen(intent: Intent): boolean {
   return intent.state === "open";
 }
 
+/**
+ * 已到计划时间却还没收尾：唤醒文案要说"已到计划时间，仍未完成"，
+ * 而不是继续显示一个已经过去的时间点。
+ */
+export function isOverdue(intent: Intent, now: Date): boolean {
+  if (intent.state !== "open") return false;
+  const at = remindAt(intent);
+  return at !== undefined && at <= now.getTime();
+}
+
 /** 该意图最该被提起的时刻（dueAt 优先，其次 preferredAt）；没有则 undefined。 */
 export function remindAt(intent: Intent): number | undefined {
   const due = parseInstant(intent.dueAt);

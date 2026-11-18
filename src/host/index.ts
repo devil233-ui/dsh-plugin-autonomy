@@ -62,10 +62,14 @@ export function apply(ctx: Context): void {
   let config: AutonomyConfig = loadConfig(dataDir, logger);
 
   const state = new StateStore(dataDir, config.maxRuns, config.maxIntents);
+  let schedulerRef: Scheduler | undefined;
   const driver = new WakeDriver({
     agents: ctx.agents as unknown as AgentsFacade,
     timeZone,
     logger,
+    onPhase: (sessionId, runId, phase) => {
+      if (phase === 'settling') schedulerRef?.markSettling(sessionId, runId);
+    },
   });
   let panel: PanelService | undefined;
   const scheduler = new Scheduler({
@@ -90,9 +94,11 @@ export function apply(ctx: Context): void {
     panel?.notify();
   };
 
+  schedulerRef = scheduler;
+
   panel = new PanelService({
     dataDir,
-    timeZone,
+    timeZone: () => (config.timezone !== '' ? config.timezone : timeZone),
     getConfig: () => config,
     setConfig: applyConfig,
     state,

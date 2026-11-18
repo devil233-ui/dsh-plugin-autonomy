@@ -16,6 +16,7 @@ import {
   MAX_INTENT_TEXT,
   createIntent,
   isOpen,
+  isOverdue,
   remindAt,
   reviseIntent,
   settleIntent,
@@ -287,5 +288,49 @@ describe("run: 判断记录", () => {
     const trimmed = trimRuns([...finished, running], 2);
     assert.equal(trimmed.length, 2);
     assert.ok(trimmed.some((run) => run.id === "c"));
+  });
+});
+
+describe("扩展：星期窗口与过期判定", () => {
+  it('睡眠窗口支持 @周几 后缀，可用于跨周长窗口', () => {
+    const windows = parseSleepWindows('23:00-08:00@5-1');
+    assert.deepEqual(windows, [{ start: '23:00', end: '08:00', startDay: 5, endDay: 1 }]);
+    // 周五 23:30 已经睡下
+    assert.equal(isSleepingAt(new Date('2026-11-20T23:30:00+08:00'), windows, 'Asia/Shanghai'), true);
+    // 周一 07:00 还在睡，周一 08:00 起床
+    assert.equal(isSleepingAt(new Date('2026-11-23T07:00:00+08:00'), windows, 'Asia/Shanghai'), true);
+    assert.equal(isSleepingAt(new Date('2026-11-23T08:00:00+08:00'), windows, 'Asia/Shanghai'), false);
+    // 周二同一时刻不睡
+    assert.equal(isSleepingAt(new Date('2026-11-24T07:00:00+08:00'), windows, 'Asia/Shanghai'), false);
+  });
+
+  it('不带星期的窗口仍然是每天同一段', () => {
+    const windows = parseSleepWindows('23:00-08:00');
+    assert.equal(isSleepingAt(new Date('2026-11-20T23:30:00+08:00'), windows, 'Asia/Shanghai'), true);
+    assert.equal(isSleepingAt(new Date('2026-11-24T07:00:00+08:00'), windows, 'Asia/Shanghai'), true);
+    assert.equal(isSleepingAt(new Date('2026-11-24T12:00:00+08:00'), windows, 'Asia/Shanghai'), false);
+  });
+
+  it('非法的日期后缀整段丢弃', () => {
+    assert.deepEqual(parseSleepWindows('23:00-08:00@9-1'), []);
+    assert.deepEqual(parseSleepWindows('23:00-08:00@x'), []);
+  });
+
+  it('isOverdue 只在 open 且计划时间已过时为真', () => {
+    const now = new Date('2026-11-20T12:00:00+08:00');
+    const base = createIntent({ text: '交周报', kind: 'agreement', dueAt: '2026-11-20T11:00:00+08:00' }, now, () => 'a1');
+    assert.equal(base.ok, true);
+    if (!base.ok) return;
+    assert.equal(isOverdue(base.value, now), true);
+
+    const later = createIntent({ text: '交周报', kind: 'agreement', dueAt: '2026-11-20T18:00:00+08:00' }, now, () => 'a2');
+    assert.equal(later.ok, true);
+    if (!later.ok) return;
+    assert.equal(isOverdue(later.value, now), false);
+
+    const settled = settleIntent(base.value, 'done', 1, '已交', now);
+    assert.equal(settled.ok, true);
+    if (!settled.ok) return;
+    assert.equal(isOverdue(settled.value, now), false, '收尾后不再算过期');
   });
 });

@@ -40,10 +40,20 @@ export interface SessionState {
   lastSelfWake?: SelfWake & { firedAt: number };
   intents: Intent[];
   runs: RunRecord[];
+  /**
+   * Recently applied autonomy_schedule requestIds (newest last, capped).
+   * Re-sending the same request must not reschedule anything (whalelife's
+   * requestId idempotency), and a restart must not replay it either.
+   */
+  seenRequests?: string[];
+  /** Bumped on every accepted schedule change; stale versions are refused. */
+  selfWakeVersion?: number;
   /** Local date (`YYYY-MM-DD`) the daily counter belongs to. */
   counterDay?: string;
   counterRuns: number;
 }
+
+export const MAX_SEEN_REQUESTS = 32;
 
 export interface AutonomyState {
   version: number;

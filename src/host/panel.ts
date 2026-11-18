@@ -127,7 +127,7 @@ function readBoundedJson(req: HttpRequestLike, limit: number): Promise<Record<st
 
 export interface PanelServiceDeps {
   dataDir: string;
-  timeZone: string;
+  timeZone: string | (() => string);
   getConfig(): AutonomyConfig;
   setConfig(next: AutonomyConfig): void;
   state: StateStore;
@@ -196,7 +196,8 @@ export class PanelService {
       if (activityA !== activityB) return activityB - activityA;
       return a.sessionId.localeCompare(b.sessionId);
     });
-    return { now, timeZone: this.#deps.timeZone, dataDir: this.#deps.dataDir, config, sessions };
+    const zone = typeof this.#deps.timeZone === 'function' ? this.#deps.timeZone() : this.#deps.timeZone;
+    return { now, timeZone: zone, dataDir: this.#deps.dataDir, config, sessions };
   }
 
   async action(raw: unknown, focus?: string): Promise<{ ok: true; snapshot: PanelSnapshot } | { ok: false; error: { code: string; message: string } }> {

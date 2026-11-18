@@ -7,7 +7,28 @@
 import { randomBytes } from "node:crypto";
 
 export type RunTrigger = "random" | "self" | "manual" | "agreement";
-export type RunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+/**
+ * 与 whalelife 对齐的九态：
+ *   queued      已入队，还没开始
+ *   running     正在跑自主回合
+ *   settling    回合已结束，正在等待会话落定与观察
+ *   completed   正常结算
+ *   failed      异常
+ *   cancelled   被取消（手动停止/宿主关闭）
+ *   interrupted 进程重启时仍在跑的，一律判中断且不重放
+ *   uncertain   观察到一半（超时），结论不可信
+ *   busy        会话正忙，这次没领到
+ */
+export type RunStatus =
+  | "queued"
+  | "running"
+  | "settling"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "interrupted"
+  | "uncertain"
+  | "busy";
 export type RunDecision = "acted" | "no_action";
 
 export interface RunRecord {
@@ -42,7 +63,13 @@ export function isRunTrigger(value: unknown): value is RunTrigger {
 }
 
 export function isTerminal(status: RunStatus): boolean {
-  return status === "completed" || status === "failed" || status === "cancelled";
+  return (
+    status === "completed" ||
+    status === "failed" ||
+    status === "cancelled" ||
+    status === "interrupted" ||
+    status === "uncertain"
+  );
 }
 
 export interface CreateRunInput {
@@ -75,7 +102,8 @@ export function settleRun(
   decision: RunDecision,
   reason: string | undefined,
   now: Date,
-  status: Extract<RunStatus, "completed" | "failed" | "cancelled"> = "completed"
+  status: Extract<RunStatus, "completed" | "failed" | "cancelled" | "interrupted" | "uncertain" | "busy"> =
+    "completed"
 ): RunRecord {
   const next: RunRecord = {
     ...run,
@@ -85,6 +113,23 @@ export function settleRun(
   };
   if (reason !== undefined && reason.trim() !== "") next.reason = truncate(reason, MAX_REASON);
   return next;
+}
+
+/** 回合跑完、正在等会话落定：这段时间的结论还不算数。 */
+export function markSettling(run: RunRecord): RunRecord {
+  if (run.status !== "running") return run;
+  return { ...run, status: "settling" };
+}
+
+/** 进程重启时仍在跑的 run：判中断，且不再重放（whalelife 的 recovery 语义）。 */
+export function markInterrupted(run: RunRecord, reason: string, now: Date): RunRecord {
+  if (isTerminal(run.status)) return run;
+  return {
+    ...run,
+    status: "interrupted",
+    reason: truncate(reason, MAX_REASON),
+    endedAt: now.toISOString()
+  };
 }
 
 /** 未正常结束的 run（超时/异常）。 */
