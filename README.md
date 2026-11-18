@@ -106,7 +106,4 @@ pnpm test         # 43 个用例，覆盖抖动、概率、跨夜与跨周窗口
 
 ## 致谢
 
-行为语义来自下面两个上游项目。本仓库是在DSH插件API上的独立实现，未复制其源码：
-
-- [iinukami/whalelife-plugin-autonomy](https://github.com/iinukami/whalelife-plugin-autonomy)：原始设计，外部节律掷骰、意图台账、判断记录与面板的语义都出自这里，配置项与工具命名也沿用其约定。
-- [devil233-ui/astrbot-plugin-autonomy](https://github.com/devil233-ui/astrbot-plugin-autonomy)：AstrBot上的移植版，本插件补齐一二档能力时以它的README与源码为参照。
+外部节律掷骰、意图台账、判断记录与面板的设计出自[iinukami/whalelife-plugin-autonomy](https://github.com/iinukami/whalelife-plugin-autonomy)，配置项与工具命名也沿用其约定。本仓库是在DSH插件API上的独立实现，未复制其源码。
