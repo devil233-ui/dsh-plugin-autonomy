@@ -93,7 +93,7 @@ pnpm test      # core 纯逻辑 + 宿主契约测试
 pnpm install
 pnpm build        # host 侧 tsc → lib/
 pnpm build:client # 客户端 esbuild → lib/client.js
-pnpm test         # 32 个用例，覆盖抖动、概率、跨夜窗口、意图状态机、run 生命周期
+pnpm test         # 43 个用例，覆盖抖动、概率、跨夜与跨周窗口、意图状态机、run 生命周期、宿主契约
 ```
 
 `src/core/` 是纯逻辑，不依赖任何 `@deepseek-ai` 包，可单独测试。
@@ -103,3 +103,10 @@ pnpm test         # 32 个用例，覆盖抖动、概率、跨夜窗口、意图
 - 唤醒通过 `agents.resume` 恢复冷会话，恢复失败时该次计入 `failed` 并留下错误文本。
 - `minIdleMinutes` 依赖宿主写入的活动时间；长时间空闲的会话会按自适应倍率提高概率。
 - 面板展示的是最近 20 条判断、50 条意图（可在配置里调整保留条数）。
+
+## 致谢
+
+行为语义来自下面两个上游项目。本仓库是在DSH插件API上的独立实现，未复制其源码：
+
+- [iinukami/whalelife-plugin-autonomy](https://github.com/iinukami/whalelife-plugin-autonomy)：原始设计，外部节律掷骰、意图台账、判断记录与面板的语义都出自这里，配置项与工具命名也沿用其约定。
+- [devil233-ui/astrbot-plugin-autonomy](https://github.com/devil233-ui/astrbot-plugin-autonomy)：AstrBot上的移植版，本插件补齐一二档能力时以它的README与源码为参照。
