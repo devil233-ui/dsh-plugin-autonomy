@@ -53,4 +53,4 @@ ${body}
 
 mkdirSync(resolve(root, 'lib'), { recursive: true });
 writeFileSync(resolve(root, 'lib/client.js'), wrapped, 'utf8');
-console.log(`build-client: lib/client.js ${wrapped.length} bytes`);
+console.log(`build-client: lib/client.js ${Buffer.byteLength(wrapped, "utf8")} bytes`);

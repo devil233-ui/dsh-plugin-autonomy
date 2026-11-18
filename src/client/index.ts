@@ -296,13 +296,13 @@ export function apply(ctx: Context): void {
       h!('div', { className: 'dsh-autonomy-section' },
         h!('div', { className: 'dsh-autonomy-section-head' },
           h!('span', { className: 'dsh-autonomy-label' }, '会话'),
-          h!('span', { className: 'dsh-autonomy-meta' }, `${snapshot.sessions.length} 个受管会话`),
+          h!('span', { className: 'dsh-autonomy-meta' }, `${snapshot.sessions.length} 个已记录会话（${snapshot.sessions.filter((row) => row.live).length} 个在跑）`),
         ),
         h!('div', { className: 'dsh-autonomy-row' },
           h!('input', {
             className: 'dsh-autonomy-input',
             style: { flex: 1, minWidth: '200px' },
-            placeholder: '会话 id（留空 = 第一个受管会话）',
+            placeholder: '会话 id（留空 = 第一个在跑的会话）',
             value: sessionId,
             onChange: (event: { target: { value: string } }) => setSessionId(event.target.value),
           }),
@@ -311,7 +311,7 @@ export function apply(ctx: Context): void {
           h!('button', { className: 'dsh-autonomy-btn', disabled: busy, onClick: () => void act({ type: 'stop' }) }, '结束并取消排队'),
         ),
         activeRow === undefined
-          ? h!('div', { className: 'dsh-autonomy-empty' }, '还没有受管会话：先在目标会话里聊一句，或在上面的「目标会话」里填 id。')
+          ? h!('div', { className: 'dsh-autonomy-empty' }, '还没有记录到会话：先在目标会话里聊一句，或在上面的「目标会话」里填 id。')
           : h!('div', { className: 'dsh-autonomy-meta' },
             `${activeRow.sessionId} · ${activeRow.live ? '在线' : '冷会话（唤醒时恢复）'}`
             + ` · 下次掷骰 ${fmtTime(activeRow.nextCheckAt)}`
