@@ -14,7 +14,7 @@
 | 意图台账 | 无 | 想法 / 约定两类，带版本与状态机 |
 | 判断记录 | 每次投递一条 run | 每次掷骰命中一条 run，记 trigger / decision / reason / 起止时间 |
 
-节律语义对齐 AstrBot 的 `astrbot_plugin_autonomy`（上游原版 `whalelife-plugin-autonomy`）：掷骰、概率、自适应倍率、睡眠窗口（含跨夜与跨周）、意图台账、判断记录、面板手动触发，这些行为一一对应；上游的 `allowSelfWake`、`timezone`、`motivation`、`requestId` 幂等、九态判断记录与「重启不重放」恢复语义也已搬过来。差异是本插件跑在 DSH 的宿主侧，用 `agents` 服务唤醒任意受管会话（冷会话会先恢复），而不是借助渠道插件的定时任务。
+节律语义对齐 AstrBot 的 `astrbot_plugin_autonomy`（上游原版 `whalelife-plugin-autonomy`）：掷骰、概率、自适应倍率、睡眠窗口（含跨夜与跨周）、意图台账、判断记录、面板手动触发，这些行为一一对应；上游的 `allowSelfWake`、`timezone`、`motivation`、`requestId` 幂等、九态判断记录与「重启不重放」恢复语义也已搬过来。另外补了一道上游没有的闸：睡眠窗口内，其他插件推进会话的客人回合会在 `followup`/`steer` 入口被拦下（`quietBlockGuest`，默认开）。差异是本插件跑在 DSH 的宿主侧，用 `agents` 服务唤醒任意受管会话（冷会话会先恢复），而不是借助渠道插件的定时任务。
 
 ## 安装
 
@@ -44,6 +44,7 @@ dsh plugin add <本仓库路径或包名>
 | `allowSelfWake` | `true` | 是否允许模型用 `autonomy_schedule` 给自己排唤醒 |
 | `motivation` | `""` | 覆盖自主回合开场那段「决定做什么」的文案；留空用内置 |
 | `selfWakeDuringSleep` | `false` | 模型自排的唤醒是否允许落在睡眠窗口 |
+| `quietBlockGuest` | `true` | 睡眠窗口内丢掉别的插件推进来的「客人」回合（如 aurabot 群聊里的 @、引用、唤醒词命中）；主人、面板与其他插件照常放行 |
 | `maxRunsPerDay` | `20` | 每日判断次数上限，`0` 不限 |
 | `minIdleMinutes` | `0` | 距上次活动不足此值则不掷骰 |
 | `sessions` | `[]` | 目标会话；留空则管理全部根会话 |

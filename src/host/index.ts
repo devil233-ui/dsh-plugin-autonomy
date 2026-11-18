@@ -30,7 +30,9 @@ import { Scheduler } from './scheduler.js';
 import { WakeDriver } from './wake.js';
 import { registerAutonomyTools } from './tools.js';
 import { PanelService, installPanelRoutes } from './panel.js';
-import type { AgentsFacade } from './types.js';
+import { asLiveAgent, type AgentsFacade } from './types.js';
+import { installIncomingGuard } from './guard.js';
+import { isSleepingAt, parseSleepWindows } from '../core/schedule.js';
 import { PLUGIN_NAME } from './framing.js';
 
 export const name = PLUGIN_NAME;
@@ -124,6 +126,20 @@ export function apply(ctx: Context): void {
 
   // Tools live on the agent scope, so they are re-registered for every root
   // agent the registry publishes — including ones resumed by a cold wake.
+  // The quiet-window gate wraps followup/steer on every root agent, so guest
+  // turns other plugins push into a session during a sleep window are dropped
+  // here instead of reaching the model.
+  const guards: Array<() => void> = [];
+  const sleepingNow = (): boolean => {
+    if (config.sleepWindows.length === 0) return false;
+    try {
+      const zone = config.timezone !== '' ? config.timezone : timeZone;
+      return isSleepingAt(new Date(), parseSleepWindows(config.sleepWindows.join(',')), zone);
+    } catch {
+      return false;
+    }
+  };
+
   const registered = new WeakSet<Agent>();
   const registerOne = (agent: Agent): void => {
     if (registered.has(agent)) return;
@@ -132,6 +148,27 @@ export function apply(ctx: Context): void {
       registerAutonomyTools(agent.ctx, agent, services);
     } catch (error) {
       logger.warn(`dsh-autonomy: could not register tools on agent ${String(agent.id)} (${String(error)})`);
+    }
+    const live = asLiveAgent(agent);
+    if (live !== undefined) {
+      try {
+        guards.push(
+          installIncomingGuard(live, {
+            sleeping: sleepingNow,
+            blockGuest: () => config.quietBlockGuest,
+            onSuppress: (sessionId, reason) => {
+              state.update(sessionId, (session) => {
+                session.suppressedTurns = (session.suppressedTurns ?? 0) + 1;
+                session.suppressedAt = Date.now();
+              });
+              logger.warn(`dsh-autonomy: dropped a guest turn in ${sessionId} — ${reason}`);
+            },
+            log: (message) => logger.warn(`dsh-autonomy: ${message}`),
+          }),
+        );
+      } catch (error) {
+        logger.warn(`dsh-autonomy: could not guard agent ${String(agent.id)} (${String(error)})`);
+      }
     }
   };
   ctx.on('agent/created', ({ agent }) => {
@@ -146,6 +183,7 @@ export function apply(ctx: Context): void {
     return () => {
       scheduler.stop();
       disposePanel?.();
+      for (const dispose of guards) dispose();
     };
   }, 'dsh-autonomy:lifecycle');
 

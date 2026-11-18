@@ -46,6 +46,7 @@ interface ConfigView {
   timezone: string;
   allowSelfWake: boolean;
   motivation: string;
+  quietBlockGuest: boolean;
   selfWakeDuringSleep: boolean;
   maxRunsPerDay: number;
   minIdleMinutes: number;
@@ -82,6 +83,8 @@ interface SessionRow {
   nextCheckAt: number;
   selfWake: { at: number; note?: string } | null;
   lastSelfWake: { at: number; note?: string; firedAt: number } | null;
+  suppressedTurns: number;
+  suppressedAt: number | null;
   openIntents: IntentRow[];
   settledIntents: IntentRow[];
   runs: RunRow[];
@@ -244,7 +247,7 @@ export function apply(ctx: Context): void {
           patch[key] = raw.split(',').map((part) => part.trim()).filter((part) => part !== '');
         } else if (key === 'mode') {
           patch[key] = raw.trim();
-        } else if (key === 'enabled' || key === 'selfWakeDuringSleep' || key === 'allowSelfWake') {
+        } else if (key === 'enabled' || key === 'selfWakeDuringSleep' || key === 'allowSelfWake' || key === 'quietBlockGuest') {
           patch[key] = raw.trim() === 'true';
         } else {
           const number = Number(raw);
@@ -290,6 +293,7 @@ export function apply(ctx: Context): void {
         field('timezone', '时区（留空 = 宿主时区）', config?.timezone ?? ''),
         field('allowSelfWake', '允许她自排唤醒（true / false）', String(config?.allowSelfWake ?? true)),
         field('motivation', '自主回合开场白（留空 = 内置）', config?.motivation ?? ''),
+        field('quietBlockGuest', '睡眠窗内拦下客人回合（true / false）', String(config?.quietBlockGuest ?? true)),
         field('enabled', '启用（true / false）', String(config?.enabled ?? true)),
       ),
       h!('div', { className: 'dsh-autonomy-row' },
@@ -323,7 +327,8 @@ export function apply(ctx: Context): void {
             `${activeRow.sessionId} · ${activeRow.live ? '在线' : '冷会话（唤醒需 resume，本版未实测）'}`
             + ` · 下次掷骰 ${fmtTime(activeRow.nextCheckAt)}`
             + ` · 上次活动 ${fmtTime(activeRow.lastActivityAt)}`
-            + (activeRow.selfWake === null ? '' : ` · 自排 ${fmtTime(activeRow.selfWake.at)}`)),
+            + (activeRow.selfWake === null ? '' : ` · 自排 ${fmtTime(activeRow.selfWake.at)}`)
+            + (activeRow.suppressedTurns > 0 ? ` · 睡眠期已拦 ${activeRow.suppressedTurns} 条` : '')),
       ),
 
       h!('div', { className: 'dsh-autonomy-section' },
