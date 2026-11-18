@@ -3,30 +3,58 @@
  *
  * aurabot (and any other plugin that pushes turns) reaches a session through
  * `agent.followup` / `agent.steer`. Wrapping those two entry points is the only
- * place where the plugin can see the incoming message's `source` before the
+ * place where this plugin can see the incoming message's `source` before the
  * turn starts, so the decision lives here as a thin adapter over the pure
  * rules in `core/quiet.ts`.
  *
- * The wrapper is deliberately conservative: anything it cannot prove is a
- * guest aurabot turn is delivered unchanged. `ctx.effect` in the caller owns
- * the returned restore function.
+ * A guest turn inside the sleep window is NOT dropped. The pushing plugin
+ * marks its chat busy and only clears it on `turn/end`; a dropped message
+ * never produces one, which leaves the chat stuck forever. Instead the turn is
+ * replaced by a short "stay silent, end the turn" notice that still settles
+ * normally.
+ *
+ * The returned restore function is owned by `ctx.effect` in the caller.
  */
+
+import type { UserMessage } from '@deepseek-ai/dsh-llm'
 
 import { suppressReason, type IncomingSource } from '../core/quiet.js'
 import type { LiveAgent } from './types.js'
+
+export interface QuietReplacement {
+  chat?: string
+  excerpt: string
+}
 
 export interface GuardDeps {
   /** True while the configured sleep window covers the current local time. */
   sleeping(): boolean
   /** The `quietBlockGuest` switch from the live config. */
   blockGuest(): boolean
-  /** Records a dropped turn (state + log); sessionId is the managed session. */
-  onSuppress(sessionId: string, reason: string): void
+  /** Records a replaced turn (state + log); sessionId is the managed session. */
+  onSuppress(sessionId: string, reason: string, detail: QuietReplacement): void
+  /** Builds the stand-in message that keeps the pusher's turn machine happy. */
+  buildQuiet(sessionId: string, detail: QuietReplacement): UserMessage
   log(message: string): void
 }
 
 interface SourcedMessage {
   readonly source?: IncomingSource
+  readonly content?: readonly { readonly type?: string; readonly text?: string }[]
+}
+
+const EXCERPT_LIMIT = 80
+
+function excerptOf(message: SourcedMessage | undefined): string {
+  const blocks = message?.content
+  if (!Array.isArray(blocks)) return ''
+  for (const block of blocks) {
+    if (block?.type !== 'text' || typeof block.text !== 'string') continue
+    const text = block.text.replace(/\s+/g, ' ').trim()
+    if (text === '') continue
+    return text.length > EXCERPT_LIMIT ? `${text.slice(0, EXCERPT_LIMIT)}…` : text
+  }
+  return ''
 }
 
 export function installIncomingGuard(agent: LiveAgent, deps: GuardDeps): () => void {
@@ -44,12 +72,17 @@ export function installIncomingGuard(agent: LiveAgent, deps: GuardDeps): () => v
         sleeping: deps.sleeping(),
         blockGuest: deps.blockGuest(),
       })
-      if (reason !== null) {
-        deps.onSuppress(String(agent.id), reason)
-        deps.log(`${agent.id}: dropped ${name} — ${reason}`)
-        return undefined
+      if (reason === null) {
+        return (original as (...inner: unknown[]) => unknown).apply(agent, args)
       }
-      return (original as (...inner: unknown[]) => unknown).apply(agent, args)
+      const detail: QuietReplacement = {
+        chat: message?.source?.speaker?.chat,
+        excerpt: excerptOf(message),
+      }
+      deps.onSuppress(String(agent.id), reason, detail)
+      deps.log(`${agent.id}: replaced ${name} with a quiet notice — ${reason}`)
+      const replacement = deps.buildQuiet(String(agent.id), detail)
+      return (original as (...inner: unknown[]) => unknown).apply(agent, [replacement, ...args.slice(1)])
     }
 
     try {
