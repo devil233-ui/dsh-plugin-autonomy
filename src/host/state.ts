@@ -47,6 +47,8 @@ export interface SessionState {
    * 可选：老状态文件里没有这一栏，读出来按空队列处理，不为此升版本号。
    */
   outbox?: OutboxItem[];
+  /** 上次复盘的时间（epoch ms）；没有这一栏 = 还没复盘过。 */
+  lastReviewAt?: number;
   /**
    * Recently applied autonomy_schedule requestIds (newest last, capped).
    * Re-sending the same request must not reschedule anything (whalelife's

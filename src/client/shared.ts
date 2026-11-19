@@ -38,6 +38,11 @@ export interface ConfigView {
   speakCooldownMinutes: number;
   scoreEnabled: boolean;
   scoreThreshold: number;
+  reviewEnabled: boolean;
+  reviewBatch: number;
+  reviewMinGapMinutes: number;
+  reviewMaxInputTokens: number;
+  reviewMaxOutputTokens: number;
   enabled: boolean;
 }
 

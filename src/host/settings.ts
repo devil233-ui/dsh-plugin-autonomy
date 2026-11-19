@@ -67,6 +67,12 @@ export interface AutonomyConfig {
   speakTargets: string[];
   /** Minutes to wait before speaking in the same chat again; 0 disables it. */
   speakCooldownMinutes: number;
+  /** 复盘：攒够多少条判断蒸馏一次；0/关闭时完全不跑。 */
+  reviewEnabled: boolean;
+  reviewBatch: number;
+  reviewMinGapMinutes: number;
+  reviewMaxInputTokens: number;
+  reviewMaxOutputTokens: number;
   /** 排队等待的空话最多存多久（分钟）；0 = 不排队，只拒绝。 */
   outboxTtlMinutes: number;
   /** Rank open intents by a recomputable score before an autonomous turn. */
@@ -106,6 +112,11 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   outboxTtlMinutes: 10,
   scoreEnabled: true,
   scoreThreshold: 0.5,
+  reviewEnabled: true,
+  reviewBatch: 5,
+  reviewMinGapMinutes: 120,
+  reviewMaxInputTokens: 4096,
+  reviewMaxOutputTokens: 512,
   enabled: true,
   maxRuns: 20,
   maxIntents: 50,
@@ -178,6 +189,11 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     outboxTtlMinutes: Math.round(numberOr(input.outboxTtlMinutes, base.outboxTtlMinutes, 0, 240)),
     scoreEnabled: booleanOr(input.scoreEnabled, base.scoreEnabled),
     scoreThreshold: numberOr(input.scoreThreshold, base.scoreThreshold, 0, 1),
+    reviewEnabled: booleanOr(input.reviewEnabled, base.reviewEnabled),
+    reviewBatch: Math.round(numberOr(input.reviewBatch, base.reviewBatch, 1, 50)),
+    reviewMinGapMinutes: Math.round(numberOr(input.reviewMinGapMinutes, base.reviewMinGapMinutes, 0, 1440)),
+    reviewMaxInputTokens: Math.round(numberOr(input.reviewMaxInputTokens, base.reviewMaxInputTokens, 512, 65536)),
+    reviewMaxOutputTokens: Math.round(numberOr(input.reviewMaxOutputTokens, base.reviewMaxOutputTokens, 128, 8192)),
     enabled: booleanOr(input.enabled, base.enabled),
     maxRuns: Math.round(numberOr(input.maxRuns, base.maxRuns, 1, 200)),
     maxIntents: Math.round(numberOr(input.maxIntents, base.maxIntents, 1, 500)),

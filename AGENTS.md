@@ -35,7 +35,8 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 10. **说话是三道闸，顺序不能换**：①主人私聊恒放行（不写 `target` 就是发主人，不需要配置）；②`config.speakTargets` 只加「除主人之外」的去处，空 = 除主人外一律不发，拒绝话术里要写明主人私聊仍可用；③插队守卫：那个聊天有人说了话她还没回 → 拒；同一聊天冷却期内（`speakCooldownMinutes`，默认 3，0=关）说过 → 拒。守卫全部从 `aurabot.events()` 的事件环重算，不另存状态；读不到事件环就退化成只查名单，不能因此把发言全堵死。
 11. **唤醒永不抛异常**。宿主是 fail-loud（未捕获异常直接 exit(1)），而 `sessionController.resolveAgent` 可能返回 `{error}`；早期 `pickAgent` 把它当 agent、读 `.session.seq` 就把整个宿主带走了（2026-11-19 一次真实唤醒）。`looksLikeAgent` 必须验 `followup` 是函数、`session.seq` 是数字；`wake()` 外层 catch 成 `{status:'error'}`，调度侧再兜一层。
 12. **台账是跨会话的**。账本归 `config.wakeSession`（落点空时归工具所在会话），`autonomy_intents` 读写要合并「本会话 + 落点会话」，`revise/complete/abandon` 必须先找到真正持有该 id 的会话再改；面板行要带 `ownerSessionId`，否则在唤醒房间点「完成」会报 `no intent <id>`。
-13. **打分是纯函数，可复算**。`src/core/score.ts` 只看 `dueAt/preferredAt/kind/source` 与传入的 `recent` 文本，权重 `SCORE_WEIGHTS` 固定；`scoreEnabled` 只决定是否把候选塞进 framing，不改变台账状态（低分的意图仍然开着）。
+13. **复盘不碰唤醒节奏**。攒够 `reviewBatch` 条判断（默认 5）、且距上次至少 `reviewMinGapMinutes`（默认 120）分钟，调度器才跑一次；它不改任何会话的 `nextCheckAt`、不占聊天会话，模型通道走 `aurabot.hub.runSystemTurn('autonomy-review', …, { noTools: true, key: 'review' })`，没装 aura 就退回 `templateReview` 的确定性模板。产出追加到 `<dataDir>/journal/<date>.md`，`memoryDrafts` 经 `aurabot.call({module:'memory', method:'addEvent'})` 落记忆。token 预算按 2 字符≈1 token 粗估，超了从最旧的记录开始裁（`buildReviewPrompt`）。
+14. **打分是纯函数，可复算**。`src/core/score.ts` 只看 `dueAt/preferredAt/kind/source` 与传入的 `recent` 文本，权重 `SCORE_WEIGHTS` 固定；`scoreEnabled` 只决定是否把候选塞进 framing，不改变台账状态（低分的意图仍然开着）。
 
 ## 与 aurabot 的边界
 

@@ -43,6 +43,8 @@ export interface SchedulerDeps {
    * 掷骰无关，谁都不该因为它而被提前唤醒。
    */
   drainOutbox?: () => Promise<void>;
+  /** 够数就复盘一次；与掷骰无关，不改任何会话的唤醒时间。 */
+  review?: () => Promise<void>;
 }
 
 const SWEEP_MS = 15_000;
@@ -193,6 +195,13 @@ export class Scheduler {
     try {
       const config = this.#deps.config();
       if (!config.enabled) return;
+      if (this.#deps.review !== undefined) {
+        try {
+          await this.#deps.review();
+        } catch (error) {
+          this.#deps.logger.warn(`dsh-autonomy: review failed (${String(error)})`);
+        }
+      }
       if (this.#deps.drainOutbox !== undefined) {
         try {
           await this.#deps.drainOutbox();

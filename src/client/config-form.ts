@@ -64,6 +64,16 @@ export const CONFIG_GROUPS: GroupSpec[] = [
     ],
   },
   {
+    title: '复盘',
+    fields: [
+      { key: 'reviewEnabled', label: '攒够判断就复盘', hint: '把这一段的自检记录交给一次不带工具的回合蒸馏成教训；关掉就只留台账', kind: 'bool' },
+      { key: 'reviewBatch', label: '攒够几条判断复盘一次', kind: 'number', step: '1' },
+      { key: 'reviewMinGapMinutes', label: '两次复盘至少间隔（分钟）', kind: 'number', step: '10' },
+      { key: 'reviewMaxInputTokens', label: '复盘输入预算（token）', hint: '按 2 字符≈1 token 粗估，超了从最旧的记录开始裁', kind: 'number', step: '256' },
+      { key: 'reviewMaxOutputTokens', label: '复盘输出预算（token）', kind: 'number', step: '64' },
+    ],
+  },
+  {
     title: '其他',
     fields: [
       { key: 'motivation', label: '自主回合开场白', hint: '留空 = 内置', kind: 'text' },

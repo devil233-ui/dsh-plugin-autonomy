@@ -29,6 +29,7 @@ import { interjectionDenied, parseSpeakEvents, speakDenied } from '../core/speak
 import { loadConfig, saveConfig, type AutonomyConfig } from './settings.js';
 import { StateStore } from './state.js';
 import { Scheduler } from './scheduler.js';
+import { Reviewer } from './reviewer.js';
 import { WakeDriver, type SessionControllerLike } from './wake.js';
 import { registerAutonomyTools } from './tools.js';
 import { PanelService, installPanelRoutes } from './panel.js';
@@ -86,6 +87,7 @@ export function apply(ctx: Context): void {
   // 排队消息的投递口：调度器每 15 秒扫一遍，服务对象在同一次 apply 里稍后才
   // 构造好，所以这里先留一个可替换的引用。
   let drainOutboxRef: (() => Promise<void>) | undefined;
+  let reviewRef: (() => Promise<void>) | undefined;
   const scheduler = new Scheduler({
     config: () => config,
     state,
@@ -98,6 +100,9 @@ export function apply(ctx: Context): void {
     },
     drainOutbox: async () => {
       await drainOutboxRef?.();
+    },
+    review: async () => {
+      await reviewRef?.();
     },
   });
 
@@ -211,6 +216,39 @@ export function apply(ctx: Context): void {
       }, Date.now());
       logger.info(`[autonomy] outbox ${item.id} → ${item.target === '' ? 'owner private' : item.target}: ${sent ? 'sent' : 'failed'}`);
     }
+  };
+
+  // 复盘的模型通道走 aura 的系统回合（不占任何聊天），记忆走它的 memory 模块；
+  // 两样都拿不到就退回确定性模板，复盘照做，只是不蒸馏。
+  const reviewer = new Reviewer({
+    config: () => config,
+    state,
+    dataDir,
+    now: () => Date.now(),
+    log: logger,
+    runTurn: async (prompt, options) => {
+      const bridge = ctx.get('aurabot') as unknown as
+        | { hub?: { runSystemTurn?: (name: string, title: string, prompt: string, opts: Record<string, unknown>) => Promise<unknown> } }
+        | undefined;
+      const hub = bridge?.hub;
+      if (hub === undefined || typeof hub.runSystemTurn !== 'function') throw new Error('aura bot hub 不可用');
+      const reply = await hub.runSystemTurn('autonomy-review', '自主 · 复盘', prompt, {
+        timeoutMs: options.timeoutMs,
+        noTools: true,
+        key: 'review',
+      });
+      return String(reply ?? '');
+    },
+    remember: async (text) => {
+      const bridge = ctx.get('aurabot') as unknown as
+        | { call?: (input: { module: string; method: string; args: unknown[] }) => Promise<unknown> }
+        | undefined;
+      if (bridge === undefined || typeof bridge.call !== 'function') return;
+      await bridge.call({ module: 'memory', method: 'addEvent', args: [{ text, tags: ['自主', '复盘'], importance: 0.5 }] });
+    },
+  });
+  reviewRef = async (): Promise<void> => {
+    await reviewer.maybeReview();
   };
 
   // Tools live on the agent scope, so they are re-registered for every root
