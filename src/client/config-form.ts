@@ -57,7 +57,7 @@ export const CONFIG_GROUPS: GroupSpec[] = [
   {
     title: '说话与打分',
     fields: [
-      { key: 'speakTargets', label: '许她发消息的去处', hint: '一个都不填 = 她不许往外发；地址写成 group:群号 或 private:QQ号，逗号分隔', kind: 'list' },
+      { key: 'speakTargets', label: '许她发消息的去处', hint: '主人私聊始终能用，这栏只加别的去处；地址写成 group:群号 或 private:QQ号，逗号分隔', kind: 'list' },
       { key: 'speakCooldownMinutes', label: '同一聊天的发言间隔（分钟）', hint: '说过一次后这段时间内不再往同一处发；0 = 不管', kind: 'number', step: '1' },
       { key: 'scoreEnabled', label: '唤醒时给意图打分', kind: 'bool' },
       { key: 'scoreThreshold', label: '打分门槛（0-1）', kind: 'number', step: '0.05' },

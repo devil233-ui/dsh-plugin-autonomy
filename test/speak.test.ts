@@ -14,16 +14,18 @@ const MIN = 60_000;
 
 const group = 'group:1053858006';
 
-test('speak: 名单为空时一律不发', () => {
-  assert.match(speakDenied(group, []), /nothing may be sent/);
+test('speak: 主人私聊不用配置也放行', () => {
+  assert.equal(speakDenied('', []), '');
+  assert.equal(speakDenied('', [group]), '');
 });
 
-test('speak: 空 target 在名单非空时要具名', () => {
-  assert.match(speakDenied('', [group]), /target is required/);
+test('speak: 名单为空时群聊一律不发', () => {
+  assert.match(speakDenied(group, []), /whitelisted chats: none/);
 });
 
-test('speak: 不在名单里的地址被拒', () => {
+test('speak: 不在名单里的地址被拒，并说明主人私聊仍可用', () => {
   assert.match(speakDenied('group:100200300', [group]), /not allowed/);
+  assert.match(speakDenied('group:100200300', [group]), /owner in private is always open/);
 });
 
 test('speak-guard: 有人在等她回答时不许发', () => {

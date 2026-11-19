@@ -21,14 +21,16 @@ export function malformedTargetMessage(value: string): string {
   return `target must look like group:<qq> or private:<qq>, got: ${value}`;
 }
 
-/** Empty list = nothing may be sent. Otherwise: shape first, then membership. */
+/**
+ * The owner's private chat is always reachable — that is the one channel she is
+ * meant to have without configuration. The list only adds chats on top of it.
+ */
 export function speakDenied(target: string, allowed: readonly string[]): string {
-  if (allowed.length === 0) {
-    return 'no chat is whitelisted, so nothing may be sent (设置里的说话去处是空的)';
-  }
-  if (target === '') return 'target is required: name one of the whitelisted chats (group:<qq> / private:<qq>)';
+  if (target === '') return '';
   if (!isSpeakTarget(target)) return malformedTargetMessage(target);
-  if (!allowed.includes(target)) return `target not allowed: ${target}（allowed: ${allowed.join(', ')}）`;
+  if (!allowed.includes(target)) {
+    return `target not allowed: ${target}（the owner in private is always open; whitelisted chats: ${allowed.length === 0 ? 'none' : allowed.join(', ')}）`;
+  }
   return '';
 }
 

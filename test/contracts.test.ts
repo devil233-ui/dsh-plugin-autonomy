@@ -191,18 +191,19 @@ test('speak-contract：名单是硬闸，空名单一句都不许发', () => {
     openIntents: [],
     timeZone: 'Asia/Shanghai',
   };
-  // 名单为空：提示里明说这一轮发不出去，也不提怎么挑会话。
+  // 名单为空：只剩主人私聊那条路，提示里不列任何别的去处。
   const bare = renderFramingText({ ...base, speakTargets: [] });
-  assert.match(bare, /cannot send any message this turn/);
-  assert.equal(bare.includes('autonomy_say'), false);
+  assert.match(bare, /owner in private is always reachable/);
+  assert.match(bare, /No other chat is whitelisted/);
+  assert.equal(bare.includes('group:'), false);
 
   const aloud = renderFramingText({ ...base, speakTargets: ['group:1053858006'] });
   assert.match(aloud, /whitelisted chats: group:1053858006/);
   assert.match(aloud, /refused before it reaches the bot/);
 
-  // 判定顺序：空名单先拦，其次才是地址形态与是否在名单里。
-  assert.match(speakDenied('group:1053858006', []), /nothing may be sent/);
-  assert.match(speakDenied('', ['group:1053858006']), /target is required/);
+  // 判定顺序：主人私聊恒放行，其次是地址形态，最后才是名单成员。
+  assert.equal(speakDenied('', []), '');
+  assert.match(speakDenied('group:1053858006', []), /whitelisted chats: none/);
   assert.match(speakDenied('group:abc', ['group:1053858006']), /must look like/);
   assert.match(speakDenied('group:100200300', ['group:1053858006']), /target not allowed: group:100200300/);
   assert.equal(speakDenied('group:1053858006', ['group:1053858006']), '');

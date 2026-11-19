@@ -106,11 +106,11 @@ export function renderFramingText(input: FramingInput): string {
   const speakTargets = input.speakTargets ?? [];
   if (speakTargets.length === 0) {
     lines.push(
-      'You cannot send any message this turn: no chat is whitelisted for you. Work inside the workspace, or leave a note as an intent for when a channel opens.',
+      'The owner in private is always reachable: autonomy_say({ text }) without a target. No other chat is whitelisted, so do not name one. Work inside the workspace, or leave a note as an intent for when a channel opens.',
     );
   } else {
     lines.push(
-      `If speaking is the right move, use autonomy_say({ target, text }) with one of the whitelisted chats: ${speakTargets.join(', ')}. A chat outside that list is refused before it reaches the bot. Two more refusals: a chat where someone is still waiting for her answer, and the same chat again inside the cooldown window. The aura bot applies its own rules on top and reports back what happened.`,
+      `If speaking is the right move, use autonomy_say({ text }) to message the owner in private (always open), or autonomy_say({ target, text }) with one of the whitelisted chats: ${speakTargets.join(', ')}. A chat outside that list is refused before it reaches the bot. Two more refusals: a chat where someone is still waiting for her answer, and the same chat again inside the cooldown window. The aura bot applies its own rules on top and reports back what happened.`,
     );
   }
   lines.push(
