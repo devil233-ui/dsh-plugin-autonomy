@@ -50,8 +50,8 @@ export const CONFIG_GROUPS: GroupSpec[] = [
   {
     title: '唤醒落点与会话',
     fields: [
-      { key: 'wakeSession', label: '唤醒落点', hint: '留空 = 按下面的目标会话列表', kind: 'text' },
-      { key: 'sessions', label: '目标会话', hint: '留空 = 全部根会话；落点非空时忽略', kind: 'list' },
+      { key: 'wakeSession', label: '唤醒落点（首选）', hint: '填了就只在这一条会话里醒，下面那栏完全不看', kind: 'text' },
+      { key: 'sessions', label: '目标会话（落点为空时才用）', hint: '填了 = 只醒这几条；这栏也空 = 全部根会话（含 QQ 聊天，会打扰对话）', kind: 'list' },
     ],
   },
   {

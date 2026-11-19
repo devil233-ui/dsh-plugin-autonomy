@@ -33,6 +33,24 @@ import {
 
 type Tab = 'overview' | 'runs' | 'ledger' | 'schedule' | 'config';
 
+/** 面板自身的字号档位。用 zoom 整体缩放，省得逐个元素改 font-size。 */
+const SCALE_KEY = 'dsh-autonomy:textScale';
+const SCALE_STEPS = [
+  { value: 0.85, label: '小' },
+  { value: 1, label: '标准' },
+  { value: 1.15, label: '大' },
+  { value: 1.3, label: '特大' },
+];
+
+function loadScale(): number {
+  try {
+    const raw = Number(window.localStorage.getItem(SCALE_KEY));
+    return SCALE_STEPS.some((step) => step.value === raw) ? raw : 1;
+  } catch {
+    return 1;
+  }
+}
+
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: '概览' },
   { id: 'runs', label: '判断记录' },
@@ -85,6 +103,15 @@ export function AutonomyPage(): ReactElement {
   const [runs, setRuns] = React.useState<RunsPage | null>(null);
   const [runsError, setRunsError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState({ page: 0, limit: 20, trigger: '', outcome: '', session: '', q: '' });
+  const [scale, setScale] = React.useState<number>(loadScale);
+  const pickScale = (next: number): void => {
+    setScale(next);
+    try {
+      window.localStorage.setItem(SCALE_KEY, String(next));
+    } catch {
+      // 隐私模式下写不进去就算了，本次会话照样生效
+    }
+  };
 
   const pull = React.useCallback(async () => {
     try {
@@ -199,6 +226,13 @@ export function AutonomyPage(): ReactElement {
         React.createElement('span', { className: config?.enabled === true ? 'da-tag good' : 'da-tag' }, config?.enabled === true ? '在岗' : '休息'),
         React.createElement('span', { className: 'da-meta' }, `今天 ${today.length} 次判断 · 动手 ${acted} · 安静 ${quiet}`),
         React.createElement('span', { className: 'da-spacer' }),
+        React.createElement('span', { className: 'da-meta' }, '字号'),
+        React.createElement('select', {
+          className: 'da-select',
+          value: String(scale),
+          title: '这一页的字号，只影响面板，不改宿主设置',
+          onChange: (event: { target: { value: string } }) => pickScale(Number(event.target.value)),
+        }, ...SCALE_STEPS.map((step) => React.createElement('option', { key: step.value, value: String(step.value) }, step.label))),
         React.createElement('button', { className: 'da-btn', disabled: busy, onClick: () => void pull() }, '刷新'),
         React.createElement('button', {
           className: 'da-btn primary',
@@ -220,7 +254,7 @@ export function AutonomyPage(): ReactElement {
     );
 
   if (snapshot === null) {
-    return React.createElement('div', { className: 'da-surface da-page' },
+    return React.createElement('div', { className: 'da-surface da-page', style: { zoom: scale } },
       header(),
       React.createElement('div', { className: 'da-body' },
         React.createElement('div', { className: 'da-empty' }, error === null ? '载入中…' : `读取失败：${error}`)),
@@ -448,7 +482,7 @@ export function AutonomyPage(): ReactElement {
 
   const body = tab === 'overview' ? overview() : tab === 'runs' ? runsTab() : tab === 'ledger' ? ledgerTab() : tab === 'schedule' ? scheduleTab() : configTab();
 
-  return React.createElement('div', { className: 'da-surface da-page' },
+  return React.createElement('div', { className: 'da-surface da-page', style: { zoom: scale } },
     header(),
     error === null ? null : React.createElement('div', { className: 'da-err', style: { padding: '0 22px 8px' } }, error),
     body,
