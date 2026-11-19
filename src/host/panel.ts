@@ -36,6 +36,8 @@ interface HttpResponseLike {
 
 export interface IntentRow {
   id: string;
+  /** Session that actually holds this row; differs from the displayed one when aggregated. */
+  ownerSessionId?: string;
   text: string;
   kind: string;
   state: string;
@@ -103,9 +105,10 @@ export type PanelAction =
 const BODY_MAX_BYTES = 64 * 1024;
 const HEARTBEAT_MS = 25_000;
 
-function toRow(intent: Intent): IntentRow {
+function toRow(intent: Intent, ownerSessionId?: string): IntentRow {
   return {
     id: intent.id,
+    ...(ownerSessionId === undefined ? {} : { ownerSessionId }),
     text: intent.text,
     kind: intent.kind,
     state: intent.state,
@@ -204,10 +207,10 @@ export class PanelService {
    * otherwise the panel claims she owes nothing while the framing ranks three
    * items.
    */
-  #ledgerFor(sessionId: string, own: Intent[], home: string): Intent[] {
-    if (home === '' || home !== sessionId) return own;
+  #ledgerFor(sessionId: string, own: Intent[], home: string): Array<{ intent: Intent; ownerSessionId: string }> {
+    if (home === '' || home !== sessionId) return own.map((intent) => ({ intent, ownerSessionId: sessionId }));
     const seen = new Set<string>();
-    const out: Intent[] = [];
+    const out: Array<{ intent: Intent; ownerSessionId: string }> = [];
     for (const sid of [sessionId, ...this.#deps.state.sessionIds()]) {
       const entry = this.#deps.state.session(sid);
       if (entry === undefined) continue;
@@ -216,7 +219,7 @@ export class PanelService {
         const key = fingerprint(intent.text);
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push(intent);
+        out.push({ intent, ownerSessionId: sid });
       }
     }
     return out;
@@ -245,8 +248,10 @@ export class PanelService {
         nextCheckAt: state.nextCheckAt,
         selfWake: state.selfWake === undefined ? null : { ...state.selfWake },
         lastSelfWake: state.lastSelfWake === undefined ? null : { ...state.lastSelfWake },
-        openIntents: this.#ledgerFor(sessionId, state.intents.filter(isOpen), config.wakeSession.trim()).map(toRow),
-        settledIntents: state.intents.filter((intent) => !isOpen(intent)).map(toRow),
+        openIntents: this.#ledgerFor(sessionId, state.intents.filter(isOpen), config.wakeSession.trim()).map(({ intent, ownerSessionId }) =>
+          toRow(intent, ownerSessionId),
+        ),
+        settledIntents: state.intents.filter((intent) => !isOpen(intent)).map((intent) => toRow(intent, sessionId)),
         runs: [...state.runs].reverse().slice(0, 20),
       });
     }
@@ -382,12 +387,24 @@ export class PanelService {
           const nextState = body['state'] === 'abandoned' ? 'abandoned' : 'done';
           const version = typeof body['version'] === 'number' ? body['version'] : -1;
           const reason = typeof body['reason'] === 'string' && body['reason'] !== '' ? body['reason'] : undefined;
-          const state = this.#deps.state.session(target, now);
-          const intent = state?.intents.find((row) => row.id === id);
+          // A row shown in the wake room may live in another session's ledger:
+          // the aggregated view borrows rows, so settle where the row really is.
+          let owner = target;
+          let intent = this.#deps.state.session(target, now)?.intents.find((row) => row.id === id);
+          if (intent === undefined) {
+            for (const sid of this.#deps.state.sessionIds()) {
+              const hit = this.#deps.state.session(sid)?.intents.find((row) => row.id === id);
+              if (hit !== undefined) {
+                owner = sid;
+                intent = hit;
+                break;
+              }
+            }
+          }
           if (intent === undefined) throw new Error(`no intent ${id}`);
           const settled = settleIntent(intent, nextState, version, reason, new Date(now));
           if (!settled.ok) throw new Error(settled.error);
-          this.#deps.state.update(target, (entry) => {
+          this.#deps.state.update(owner, (entry) => {
             entry.intents = entry.intents.map((row) => (row.id === id ? settled.value : row));
           }, now);
           break;

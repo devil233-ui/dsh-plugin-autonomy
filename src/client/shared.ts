@@ -42,6 +42,8 @@ export interface ConfigView {
 
 export interface IntentRow {
   id: string;
+  /** Session that holds the row; absent means "the session this list came from". */
+  ownerSessionId?: string;
   text: string;
   kind: string;
   state: string;

@@ -52,7 +52,7 @@ function ledgerRows(sessions: readonly SessionRow[], which: 'open' | 'settled'):
     for (const intent of intents) {
       if (seen.has(intent.id)) continue;
       seen.add(intent.id);
-      out.push({ ...intent, sessionId: session.sessionId, aggregated: which === 'open' && intents !== undefined && session.supervised });
+      out.push({ ...intent, sessionId: intent.ownerSessionId ?? session.sessionId, aggregated: which === 'open' && intents !== undefined && session.supervised });
     }
   }
   return out;

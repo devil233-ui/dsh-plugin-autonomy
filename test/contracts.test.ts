@@ -309,3 +309,54 @@ test('runs-query：跨会话分页、筛选与计数', () => {
   // 计数反映的是筛选前的全集，页面上的筛选片才有数字可显示。
   assert.equal(panel.runs({ trigger: 'manual' }).outcomes['acted'], 1);
 });
+
+test('ledger-settle：唤醒房间显示别人的账本行，点完成要落回原会话', async () => {
+  const nowMs = Date.now();
+  const state = new MemoryState();
+  const intent = {
+    id: 'i534c159d',
+    text: '补发剧透群',
+    kind: 'thought' as const,
+    state: 'open' as const,
+    version: 1,
+    source: 'self' as const,
+    createdAt: new Date(nowMs - 60_000).toISOString(),
+    updatedAt: new Date(nowMs - 60_000).toISOString(),
+  };
+  state.sessions['chat'] = {
+    sessionId: 'chat',
+    lastActivityAt: nowMs,
+    nextCheckAt: 0,
+    intents: [intent],
+    runs: [],
+    counterRuns: 0,
+  };
+  state.sessions['room'] = {
+    sessionId: 'room',
+    lastActivityAt: nowMs,
+    nextCheckAt: 0,
+    intents: [],
+    runs: [],
+    counterRuns: 0,
+  };
+  const panel = new PanelService({
+    dataDir: '/tmp',
+    timeZone: 'Asia/Shanghai',
+    getConfig: () => normalizeConfig({ wakeSession: 'room' }),
+    setConfig: () => undefined,
+    state: state as unknown as StateStore,
+    scheduler: { managedSessions: () => ['room'], rescheduleAll: () => undefined } as unknown as Scheduler,
+    isLive: () => false,
+    log: () => undefined,
+  });
+
+  // 唤醒房间看到的是跨会话汇总，行上要带原持有者。
+  const room = panel.snapshot().sessions.find((row) => row.sessionId === 'room');
+  assert.deepEqual(room?.openIntents.map((row) => [row.id, row.ownerSessionId]), [['i534c159d', 'chat']]);
+
+  // 请求打到房间上（页面上选中的就是它），仍要落到真正持有这条的会话。
+  const result = await panel.action({ type: 'intent-settle', sessionId: 'room', id: 'i534c159d', state: 'done', version: 1 });
+  assert.equal(result.ok, true, result.ok ? '' : JSON.stringify(result.error));
+  assert.equal(state.sessions['chat']?.intents[0]?.state, 'done');
+  assert.equal(state.sessions['room']?.intents.length, 0);
+});
