@@ -43,12 +43,6 @@ export interface AutonomyConfig {
   motivation: string;
   /** Whether a self-scheduled wake may fire inside a sleep window. */
   selfWakeDuringSleep: boolean;
-  /**
-   * Inside a sleep window, drop guest turns other plugins push into a session
-   * (an aurabot group @ / wake-word hit, for example). Turns from the owner,
-   * from the panel and from other plugins keep flowing.
-   */
-  quietBlockGuest: boolean;
   /** Hard ceiling on judgement runs per session per local day. */
   maxRunsPerDay: number;
   /** Skip a roll while the agent's session received activity this recently. */
@@ -79,7 +73,6 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   allowSelfWake: true,
   motivation: '',
   selfWakeDuringSleep: false,
-  quietBlockGuest: true,
   maxRunsPerDay: 20,
   minIdleMinutes: 0,
   sessions: [],
@@ -146,7 +139,6 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     allowSelfWake: booleanOr(input.allowSelfWake, base.allowSelfWake),
     motivation: textOr(input.motivation, base.motivation),
     selfWakeDuringSleep: booleanOr(input.selfWakeDuringSleep, base.selfWakeDuringSleep),
-    quietBlockGuest: booleanOr(input.quietBlockGuest, base.quietBlockGuest),
     maxRunsPerDay: Math.round(numberOr(input.maxRunsPerDay, base.maxRunsPerDay, 0, 500)),
     minIdleMinutes: numberOr(input.minIdleMinutes, base.minIdleMinutes, 0, 24 * 60),
     sessions: stringArrayOr(input.sessions, base.sessions),

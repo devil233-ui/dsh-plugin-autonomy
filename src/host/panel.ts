@@ -53,9 +53,6 @@ export interface SessionRow {
   selfWake: { at: number; note?: string } | null;
   /** Last self-scheduled wake that actually fired, for "she planned this" history. */
   lastSelfWake: { at: number; note?: string; firedAt: number } | null;
-  /** Guest turns the quiet window dropped for this session. */
-  suppressedTurns: number;
-  suppressedAt: number | null;
   openIntents: IntentRow[];
   settledIntents: IntentRow[];
   runs: RunRecord[];
@@ -186,8 +183,6 @@ export class PanelService {
         nextCheckAt: state.nextCheckAt,
         selfWake: state.selfWake === undefined ? null : { ...state.selfWake },
         lastSelfWake: state.lastSelfWake === undefined ? null : { ...state.lastSelfWake },
-        suppressedTurns: state.suppressedTurns ?? 0,
-        suppressedAt: state.suppressedAt ?? null,
         openIntents: state.intents.filter(isOpen).map(toRow),
         settledIntents: state.intents.filter((intent) => !isOpen(intent)).map(toRow),
         runs: [...state.runs].reverse().slice(0, 20),

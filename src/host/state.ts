@@ -48,9 +48,6 @@ export interface SessionState {
   seenRequests?: string[];
   /** Bumped on every accepted schedule change; stale versions are refused. */
   selfWakeVersion?: number;
-  /** Turns dropped by the quiet-window gate, and when the last one happened. */
-  suppressedTurns?: number;
-  suppressedAt?: number;
   /** Local date (`YYYY-MM-DD`) the daily counter belongs to. */
   counterDay?: string;
   counterRuns: number;
