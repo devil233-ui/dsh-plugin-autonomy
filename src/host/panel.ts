@@ -11,6 +11,7 @@ import type { Context } from '@deepseek-ai/cordis';
 
 import { formatLocalStamp } from '../core/schedule.js';
 import { createIntent, isOpen, settleIntent, type Intent } from '../core/intent.js';
+import { fingerprint } from '../core/score.js';
 import type { RunRecord } from '../core/run.js';
 import { normalizeConfig, saveConfig, type AutonomyConfig } from './settings.js';
 import type { Scheduler } from './scheduler.js';
@@ -67,6 +68,27 @@ export interface PanelSnapshot {
   sessions: SessionRow[];
   /** Every recorded judgement since local midnight, newest first, across sessions. */
   todayRuns: RunRecord[];
+}
+
+/** Filters the standalone page sends; every field is optional. */
+export interface RunsQuery {
+  limit?: number;
+  offset?: number;
+  trigger?: string;
+  /** `decision` for finished runs, `status` for the ones that never decided. */
+  outcome?: string;
+  session?: string;
+  q?: string;
+}
+
+export interface RunsPage {
+  total: number;
+  offset: number;
+  limit: number;
+  rows: RunRecord[];
+  /** Counts over the query's non-paging filters, for the filter chips. */
+  outcomes: Record<string, number>;
+  triggers: Record<string, number>;
 }
 
 export type PanelAction =
@@ -176,6 +198,30 @@ export class PanelService {
     }
   }
 
+  /**
+   * The wake room owns the ledger: intents she wrote while a real conversation
+   * was running still have to show up under the room she actually wakes in,
+   * otherwise the panel claims she owes nothing while the framing ranks three
+   * items.
+   */
+  #ledgerFor(sessionId: string, own: Intent[], home: string): Intent[] {
+    if (home === '' || home !== sessionId) return own;
+    const seen = new Set<string>();
+    const out: Intent[] = [];
+    for (const sid of [sessionId, ...this.#deps.state.sessionIds()]) {
+      const entry = this.#deps.state.session(sid);
+      if (entry === undefined) continue;
+      for (const intent of entry.intents) {
+        if (!isOpen(intent)) continue;
+        const key = fingerprint(intent.text);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(intent);
+      }
+    }
+    return out;
+  }
+
   snapshot(focus?: string): PanelSnapshot {
     const now = Date.now();
     const config = this.#deps.getConfig();
@@ -199,7 +245,7 @@ export class PanelService {
         nextCheckAt: state.nextCheckAt,
         selfWake: state.selfWake === undefined ? null : { ...state.selfWake },
         lastSelfWake: state.lastSelfWake === undefined ? null : { ...state.lastSelfWake },
-        openIntents: state.intents.filter(isOpen).map(toRow),
+        openIntents: this.#ledgerFor(sessionId, state.intents.filter(isOpen), config.wakeSession.trim()).map(toRow),
         settledIntents: state.intents.filter((intent) => !isOpen(intent)).map(toRow),
         runs: [...state.runs].reverse().slice(0, 20),
       });
@@ -224,6 +270,46 @@ export class PanelService {
     }
     todayRuns.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
     return { now, timeZone: zone, dataDir: this.#deps.dataDir, config, sessions, todayRuns };
+  }
+
+  /**
+   * One page of judgement history across every session. The snapshot only
+   * carries a per-session tail (and today's slice), which is not enough for a
+   * page with real filtering and paging, so this walks the whole store.
+   */
+  runs(query: RunsQuery = {}): RunsPage {
+    const now = Date.now();
+    const limit = Math.min(Math.max(Math.trunc(query.limit ?? 20), 1), 200);
+    const offset = Math.max(Math.trunc(query.offset ?? 0), 0);
+    const all: RunRecord[] = [];
+    for (const sessionId of this.#deps.state.sessionIds()) {
+      const state = this.#deps.state.session(sessionId, now);
+      if (state === undefined) continue;
+      all.push(...state.runs);
+    }
+    all.sort((a, b) => {
+      const diff = Date.parse(b.startedAt) - Date.parse(a.startedAt);
+      return diff !== 0 ? diff : a.id.localeCompare(b.id);
+    });
+    const outcomeOf = (run: RunRecord): string => run.decision ?? run.status;
+    const triggers: Record<string, number> = {};
+    const outcomes: Record<string, number> = {};
+    const needle = (query.q ?? '').trim().toLowerCase();
+    const wanted = (value: string | undefined): string => (value ?? '').trim();
+    const filtered = all.filter((run) => {
+      const outcome = outcomeOf(run);
+      triggers[run.trigger] = (triggers[run.trigger] ?? 0) + 1;
+      outcomes[outcome] = (outcomes[outcome] ?? 0) + 1;
+      if (wanted(query.trigger) !== '' && run.trigger !== wanted(query.trigger)) return false;
+      if (wanted(query.outcome) !== '' && outcome !== wanted(query.outcome)) return false;
+      if (wanted(query.session) !== '' && run.sessionId !== wanted(query.session)) return false;
+      if (needle !== '') {
+        const hay = `${run.reason ?? ''} ${run.note ?? ''} ${run.sessionId} ${run.trigger} ${outcome}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+    return { total: filtered.length, offset, limit, rows: filtered.slice(offset, offset + limit), outcomes, triggers };
   }
 
   async action(raw: unknown, focus?: string): Promise<{ ok: true; snapshot: PanelSnapshot } | { ok: false; error: { code: string; message: string } }> {
@@ -340,6 +426,18 @@ export function installPanelRoutes(ctx: Context, service: PanelService): (() => 
 
   disposers.push(webserver.register({
     kind: 'exact',
+    path: '/api/dsh-autonomy/runs',
+    handler: (req, res) => {
+      try {
+        writeJson(res, 200, service.runs(runsQuery(req)));
+      } catch (error) {
+        writeJson(res, 500, { code: 'internal_error', message: String(error) });
+      }
+    },
+  }));
+
+  disposers.push(webserver.register({
+    kind: 'exact',
     path: '/api/dsh-autonomy/action',
     handler: (req, res) => {
       if (req.method !== 'POST') {
@@ -405,4 +503,20 @@ function sessionParam(req: HttpRequestLike): string | undefined {
     if (key === 'session' && value !== undefined && value !== '') return decodeURIComponent(value);
   }
   return undefined;
+}
+
+function runsQuery(req: HttpRequestLike): RunsQuery {
+  const url = typeof req.url === 'string' ? req.url : '';
+  const params = new URLSearchParams(url.includes('?') ? url.slice(url.indexOf('?') + 1) : '');
+  const number = (key: string): number | undefined => {
+    const raw = params.get(key);
+    if (raw === null || raw.trim() === '') return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  };
+  const text = (key: string): string | undefined => {
+    const raw = params.get(key);
+    return raw === null || raw.trim() === '' ? undefined : raw.trim();
+  };
+  return { limit: number('limit'), offset: number('offset'), trigger: text('trigger'), outcome: text('outcome'), session: text('session'), q: text('q') };
 }

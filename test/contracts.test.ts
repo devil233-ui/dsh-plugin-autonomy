@@ -266,3 +266,46 @@ test('today-view：合并视图跨会话收集今天的判断，隔天的旧记�
   const snapshot = panel.snapshot();
   assert.deepEqual(snapshot.todayRuns.map((entry) => entry.id), ['b', 'c']);
 });
+
+test('runs-query：跨会话分页、筛选与计数', () => {
+  const nowMs = Date.now();
+  const count = (state: MemoryState, key: string, runs: RunRecord[], intents: SessionState['intents'] = []): void => {
+    state.sessions[key] = { sessionId: key, lastActivityAt: nowMs, nextCheckAt: 0, intents, runs, counterRuns: runs.length };
+  };
+  const state = new MemoryState();
+  count(state, 's1', [
+    { id: 'a', sessionId: 's1', trigger: 'random', status: 'completed', decision: 'acted', reason: '补发剧透群', startedAt: new Date(nowMs).toISOString() },
+    { id: 'b', sessionId: 's1', trigger: 'manual', status: 'completed', decision: 'no_action', reason: '没有待办', startedAt: new Date(nowMs - 3_600_000).toISOString() },
+  ]);
+  count(state, 's2', [
+    { id: 'c', sessionId: 's2', trigger: 'self', status: 'busy', reason: '会话正忙', startedAt: new Date(nowMs - 1_800_000).toISOString() },
+  ]);
+  const panel = new PanelService({
+    dataDir: '/tmp',
+    timeZone: 'Asia/Shanghai',
+    getConfig: () => normalizeConfig({}),
+    setConfig: () => undefined,
+    state: state as unknown as StateStore,
+    scheduler: { managedSessions: () => ['s1', 's2'] } as unknown as Scheduler,
+    isLive: () => false,
+    log: () => undefined,
+  });
+
+  const all = panel.runs({});
+  assert.equal(all.total, 3);
+  assert.deepEqual(all.rows.map((row) => row.id), ['a', 'c', 'b']);
+  assert.equal(all.triggers['random'], 1);
+  assert.equal(all.outcomes['acted'], 1);
+  assert.equal(all.outcomes['busy'], 1);
+
+  const paged = panel.runs({ limit: 2, offset: 2 });
+  assert.equal(paged.total, 3);
+  assert.deepEqual(paged.rows.map((row) => row.id), ['b']);
+
+  assert.equal(panel.runs({ trigger: 'manual' }).total, 1);
+  assert.deepEqual(panel.runs({ outcome: 'no_action' }).rows.map((row) => row.id), ['b']);
+  assert.deepEqual(panel.runs({ session: 's2' }).rows.map((row) => row.id), ['c']);
+  assert.deepEqual(panel.runs({ q: '剧透' }).rows.map((row) => row.id), ['a']);
+  // 计数反映的是筛选前的全集，页面上的筛选片才有数字可显示。
+  assert.equal(panel.runs({ trigger: 'manual' }).outcomes['acted'], 1);
+});
