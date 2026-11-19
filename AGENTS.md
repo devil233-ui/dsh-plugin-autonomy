@@ -29,11 +29,11 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 6. **冷会话按 `sessionController.resolveAgent` 恢复**，别裸调 `agents.resume({resumeSessionId})`：后者不带预设与模型，`agent.options.model` 为空，人设段的 `{{model}}` 拼不出来，整轮直接 `prompt variable "{{model}}" has no value`（2026-11-19 实测）。控制器不在的宿主再退回裸 resume。
 7. **面板要遍历全部已记录会话**，不只是当前 live 的：`StateStore.sessionIds()` 保证冷会话的历史仍然可见。
 
-## 与 aurabot 的接口（跨插件约束）
+## 与 aurabot 的边界
 
-群里唤醒能拿到哪些工具，由 aura 的 `groupGates` 决定（`hub.js:141/147` 收紧、`:987` 挂载时先收起、`:2921` 每轮按说话人开合）。DSH 的 `tools.restrict` 是**取交集**、没有反向解锁的 API，所以「自主唤醒按主人回合给权限」只能在 aura 侧放开：`onSessionEvent` 见 `source.kind === 'plugin:dsh-autonomy'` 就 `applyGroupGate(key, true)`，`turn/end` 再按上一轮 QQ 说话人还回去。
+群里唤醒能拿到哪些工具，由 aura 的 `groupGates` 决定（`hub.js:141/147` 收紧、`:987` 挂载时先收起、`:2921` 每轮按说话人开合）；DSH 的 `tools.restrict` 是**取交集**、没有反向解锁的 API，插件侧只能收紧，放不开别人收的闸。
 
-那是打在安装副本 `profiles/web/node_modules/dsh-aurabot-qq/src/chat/hub.js` 上的**热补丁**，`dsh plugin add/update` 升级 aura 会覆盖；原件在 `/root/Backup/aurorabot-qk-gate-20261119-161245/hub.js.改前`。升级后先查日志里 `本机工具放开（这一轮是主人）` 这行还在不在。
+**不要改 aura 的代码。** 2026-11-19 我把它当成本需求（唤醒按主人回合给权限）的落点，往安装副本的 `hub.js` 打了热补丁，被用户当场制止并要求撤回——已按备份还原、字节一致。「唤醒给主人回合权限」这条需求因此**仍未落地**，再动之前先把方案和归属谈清楚。
 
 ## 隔离实例验证
 
