@@ -17,8 +17,9 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm';
 /** JSON-safe value, as required by tool result payloads. */
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
-import { createIntent, reviseIntent, settleIntent, isOpen, remindAt } from '../core/intent.js';
+import { createIntent, reviseIntent, settleIntent, isOpen, remindAt, type Intent } from '../core/intent.js';
 import { canFinish, settleRun } from '../core/run.js';
+import { isSpeakTarget, malformedTargetMessage } from '../core/speak.js';
 import type { AutonomyConfig } from './settings.js';
 import type { Scheduler } from './scheduler.js';
 import { MAX_SEEN_REQUESTS, type SessionState, type StateStore } from './state.js';
@@ -223,8 +224,21 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
       async execute(args) {
         const action = str(args['action']);
         const now = services.now();
-        const state = services.state.session(sessionId, now);
-        const intents = state?.intents ?? [];
+        // The ledger belongs to her, not to whichever chat happened to be open:
+        // reads span the calling session and the wake room, and writes land in
+        // the wake room when one is configured.
+        const ledgerOwner = services.config().wakeSession.trim();
+        const home = ledgerOwner === '' ? sessionId : ledgerOwner;
+        const owners = new Map<string, string>();
+        const collect = (sid: string): Intent[] => {
+          const entry = services.state.session(sid, now);
+          const list = entry?.intents ?? [];
+          for (const intent of list) if (!owners.has(intent.id)) owners.set(intent.id, sid);
+          return list;
+        };
+        const own = collect(sessionId);
+        const shared = home === sessionId ? [] : collect(home);
+        const intents = [...own, ...shared];
 
         if (action === 'list') {
           const includeSettled = args['include_settled'] === true;
@@ -238,8 +252,9 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
               version: intent.version,
               remind_at: remindAt(intent) ?? null,
               due_at: intent.dueAt ?? null,
+              ledger: owners.get(intent.id) === sessionId ? 'this session' : 'wake room',
             }));
-          return json({ session_id: sessionId, count: rows.length, intents: rows });
+          return json({ session_id: sessionId, ledger: home, count: rows.length, intents: rows });
         }
 
         if (action === 'remember') {
@@ -270,15 +285,16 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
             newIntentId,
           );
           if (!created.ok) return json({ error: created.error });
-          services.state.update(sessionId, (entry) => {
+          services.state.update(home, (entry) => {
             entry.intents = [...entry.intents, created.value];
           }, now);
-          return json({ session_id: sessionId, intent: created.value });
+          return json({ session_id: sessionId, ledger: home, intent: created.value });
         }
 
         const id = str(args['id']);
         const target = intents.find((intent) => intent.id === id);
         if (target === undefined) return json({ error: `no intent with id ${id}` });
+        const owner = owners.get(id) ?? home;
         const expectedVersion = typeof args['expected_version'] === 'number' ? args['expected_version'] : -1;
 
         if (action === 'revise') {
@@ -296,10 +312,10 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
             new Date(now),
           );
           if (!revised.ok) return json({ error: revised.error });
-          services.state.update(sessionId, (entry) => {
+          services.state.update(owner, (entry) => {
             entry.intents = entry.intents.map((intent) => (intent.id === id ? revised.value : intent));
           }, now);
-          return json({ session_id: sessionId, intent: revised.value });
+          return json({ session_id: sessionId, ledger: owner, intent: revised.value });
         }
 
         if (action === 'complete' || action === 'abandon') {
@@ -312,10 +328,10 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
             new Date(now),
           );
           if (!settled.ok) return json({ error: settled.error });
-          services.state.update(sessionId, (entry) => {
+          services.state.update(owner, (entry) => {
             entry.intents = entry.intents.map((intent) => (intent.id === id ? settled.value : intent));
           }, now);
-          return json({ session_id: sessionId, intent: settled.value });
+          return json({ session_id: sessionId, ledger: owner, intent: settled.value });
         }
 
         return json({ error: `unknown action ${action}` });
@@ -326,9 +342,9 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
     defineTool({
       name: 'autonomy_say',
       description:
-        'Speak through the aura bot (QQ) from an autonomous turn. Only the destinations the operator listed in speakTargets are accepted; leaving target out reaches the owner in private. Use it when saying something is worth more than staying silent — most wakes end without it.',
+        'Speak through the aura bot (QQ) from an autonomous turn. Pick the chat yourself with target, or leave target out to reach the owner in private; whether the message actually leaves is up to the aura bot, which reports back what happened. Use it when saying something is worth more than staying silent — most wakes end without it.',
       parameters: {
-        target: { type: 'string', description: 'One of the configured destinations, e.g. group:1053858006. Omit to reach the owner in private.' },
+        target: { type: 'string', description: 'Any chat address of the form group:<qq> or private:<qq>. Omit to reach the owner in private.' },
         text: { type: 'string', required: true, description: 'What to say. Aura splits it into bubbles on its own rules.' },
       },
       output: { schema: { type: 'object', additionalProperties: true }, render: renderValue },
@@ -336,13 +352,7 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         const text = str(args['text']).trim();
         const target = str(args['target']).trim();
         if (text === '') return json({ error: 'text is empty' });
-        const allowed = services.config().speakTargets;
-        if (allowed.length === 0) {
-          return json({ error: 'no speakTargets configured; the operator has to name a destination in the panel first' });
-        }
-        if (target !== '' && !allowed.includes(target)) {
-          return json({ error: `target not allowed: ${target}`, allowed });
-        }
+        if (!isSpeakTarget(target)) return json({ error: malformedTargetMessage(target) });
         if (services.say === undefined) return json({ error: 'the aura bot bridge is not available in this host' });
         try {
           const result = await services.say(target, text);

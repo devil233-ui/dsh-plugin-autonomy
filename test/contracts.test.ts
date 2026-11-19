@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type { RunRecord } from '../src/core/run.js';
+import { isSpeakTarget } from '../src/core/speak.js';
 import { renderFramingText } from '../src/host/framing.js';
 import { PanelService } from '../src/host/panel.js';
 import { Scheduler } from '../src/host/scheduler.js';
@@ -181,7 +182,7 @@ test('wake-room：落点为空时仍按目标会话列表', () => {
   assert.deepEqual(scheduler.managedSessions(), ['s1', 's2']);
 });
 
-test('speak-contract：没有说话名单时明确说不能说话，有名单时点名工具', () => {
+test('speak-contract：去处由她自己挑，名单只当提示，地址形态仍要合法', () => {
   const base = {
     runId: 'r1',
     sessionId: 's1',
@@ -190,13 +191,38 @@ test('speak-contract：没有说话名单时明确说不能说话，有名单时
     openIntents: [],
     timeZone: 'Asia/Shanghai',
   };
-  const silent = renderFramingText({ ...base, speakTargets: [] });
-  assert.match(silent, /no speaking channel configured/);
-  assert.doesNotMatch(silent, /autonomy_say/);
+  const bare = renderFramingText({ ...base, speakTargets: [] });
+  assert.match(bare, /autonomy_say/);
+  assert.match(bare, /aura bot's own outbound rules/);
 
   const aloud = renderFramingText({ ...base, speakTargets: ['group:1053858006'] });
-  assert.match(aloud, /autonomy_say/);
-  assert.match(aloud, /group:1053858006/);
+  assert.match(aloud, /Chats you have used before: group:1053858006/);
+
+  assert.equal(isSpeakTarget('group:1053858006'), true);
+  assert.equal(isSpeakTarget('private:1250226509'), true);
+  assert.equal(isSpeakTarget(''), true, '空目标 = 找主人私聊');
+  assert.equal(isSpeakTarget('group:abc'), false);
+  assert.equal(isSpeakTarget('1053858006'), false);
+});
+
+test('score-contract：打分结果进 framing，并声明它只是排序不是命令', () => {
+  const text = renderFramingText({
+    runId: 'r1',
+    sessionId: 's1',
+    trigger: 'random',
+    now: new Date('2026-11-19T12:00:00Z'),
+    timeZone: 'Asia/Shanghai',
+    openIntents: [
+      { text: '把二创补发到剧透群', kind: 'agreement', dueAt: '2026-11-19T09:00:00.000Z', overdue: true },
+      { text: '研究一下票圈排版', kind: 'thought' },
+    ],
+    candidates: [
+      { text: '把二创补发到剧透群', kind: 'agreement', score: 0.87, why: 'overdue by 3h; new; a promise to someone' },
+    ],
+  });
+  assert.match(text, /0\.87 \[agreement\] 把二创补发到剧透群/);
+  assert.match(text, /an ordering, not an order/);
+  assert.match(text, /still open; it just scored lower/);
 });
 
 test('today-view：合并视图跨会话收集今天的判断，隔天的旧记录不进', () => {

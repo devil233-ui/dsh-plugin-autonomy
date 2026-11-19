@@ -31,8 +31,10 @@ export interface FramingInput {
   timeZone: string;
   /** Replaces the built-in "decide what to do" paragraph when non-empty. */
   motivation?: string;
-  /** Destinations autonomy_say may reach; empty means this turn cannot speak. */
+  /** Chats she used before; a hint for the prompt, not a limit on what she may pick. */
   speakTargets?: readonly string[];
+  /** Scored intents for this moment, highest first. Empty means nothing cleared the bar. */
+  candidates?: readonly { text: string; kind: string; score: number; why: string }[];
 }
 
 /**
@@ -76,6 +78,18 @@ export function renderFramingText(input: FramingInput): string {
     // 所以这里不再截断，只受台账上限（MAX_INTENTS=50）约束。
     for (const intent of input.openIntents) lines.push(intentLine(intent, input.timeZone));
   }
+  const candidates = input.candidates ?? [];
+  if (candidates.length > 0) {
+    lines.push(
+      'Ranked by a fixed formula this plugin can recompute (clock, novelty against what you already did, provenance, commitment). It is an ordering, not an order:',
+    );
+    for (const candidate of candidates) {
+      lines.push(`- ${candidate.score.toFixed(2)} [${candidate.kind}] ${candidate.text} — ${candidate.why}`);
+    }
+    if (input.openIntents.length > candidates.length) {
+      lines.push('Everything else on the list above is still open; it just scored lower at this moment.');
+    }
+  }
   lines.push('');
   const motivation = input.motivation?.trim() ?? '';
   if (motivation !== '') {
@@ -90,13 +104,13 @@ export function renderFramingText(input: FramingInput): string {
     'You may also record an intent for later with autonomy_intents, or schedule your own wake with autonomy_schedule.',
   );
   const speakTargets = input.speakTargets ?? [];
-  if (speakTargets.length > 0) {
-    lines.push(
-      `If speaking is the right move, use autonomy_say({ target, text }); allowed targets: ${speakTargets.join(', ')} (leave target out to reach the owner in private).`,
-    );
-  } else {
-    lines.push('You have no speaking channel configured, so this turn can only act inside the workspace.');
-  }
+  const known =
+    speakTargets.length > 0
+      ? ` Chats you have used before: ${speakTargets.join(', ')}.`
+      : '';
+  lines.push(
+    `If speaking is the right move, use autonomy_say({ text }) to reach the owner in private, or autonomy_say({ target: 'group:<id>' | 'private:<qq>', text }) to pick any chat yourself.${known} Whether it actually leaves is decided by the aura bot's own outbound rules, and it reports back what happened.`,
+  );
   lines.push(
     'End this turn with autonomy_finish(run_id, decision, reason): decision is "acted" or "no_action", reason is one short sentence.',
   );

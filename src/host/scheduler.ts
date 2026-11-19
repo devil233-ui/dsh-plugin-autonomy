@@ -21,12 +21,13 @@ import {
   type SleepWindow,
 } from '../core/schedule.js';
 import type { RunRecord, RunTrigger } from '../core/run.js';
+import { explain, fingerprint, rankCandidates, selectCandidates, type Candidate } from '../core/score.js';
 import { createRun, isTerminal, markInterrupted, markSettling, settleRun, startRun } from '../core/run.js';
 import { localDay, type StateStore } from './state.js';
 import { lastActivityEpoch } from './observer.js';
 import { sessionLogOf, type AgentsFacade } from './types.js';
 import type { AutonomyConfig } from './settings.js';
-import type { WakeDriver, WakeOutcome } from './wake.js';
+import type { WakeDriver, WakeOutcome, WakeRequest } from './wake.js';
 
 export interface SchedulerDeps {
   config(): AutonomyConfig;
@@ -40,6 +41,9 @@ export interface SchedulerDeps {
 }
 
 const SWEEP_MS = 15_000;
+
+/** How many scored intents the framing gets; the rest stay listed but unranked. */
+const MAX_RANKED = 3;
 
 function newRunId(): string {
   return randomUUID().replace(/-/g, '').slice(0, 12);
@@ -278,6 +282,23 @@ export class Scheduler {
     return lastActivityEpoch(sessionLogOf((agent as { session?: unknown }).session));
   }
 
+  /**
+   * One wake, with any throw turned into a recorded outcome. The driver guards
+   * itself too; this is the second fence, because an escaping rejection inside
+   * the sweep would exit the host.
+   */
+  async #driveWake(request: WakeRequest): Promise<WakeOutcome> {
+    try {
+      return await this.#deps.driver.wake(request);
+    } catch (error) {
+      return {
+        status: 'error',
+        sessionId: request.sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   /** Manual trigger from the panel or the tool: always runs, bypassing the dice. */
   async runNow(sessionId: string, note = 'manual trigger'): Promise<WakeOutcome> {
     return this.#run(sessionId, 'manual', note);
@@ -290,6 +311,7 @@ export class Scheduler {
     const run = createRun({ sessionId, trigger, ...(note === undefined ? {} : { note }) }, new Date(now), () => runId);
 
     let openIntents: Intent[] = [];
+    let recentNotes: string[] = [];
     this.#deps.state.update(sessionId, (state) => {
       state.runs = [...state.runs, startRun(run, new Date(now))];
       const today = localDay(now);
@@ -299,10 +321,59 @@ export class Scheduler {
       }
       state.counterRuns += 1;
       openIntents = state.intents.filter(isOpen);
+      // Novelty is measured against what she already finished or already said,
+      // so a re-worded repeat of a settled item does not score as new work.
+      recentNotes = [
+        ...state.intents.filter((intent) => !isOpen(intent)).slice(-5).map((intent) => intent.text),
+        ...state.runs
+          .filter((entry) => entry.status === 'completed' && (entry.reason ?? '').trim() !== '')
+          .slice(-5)
+          .map((entry) => entry.reason as string),
+      ];
     }, now);
     this.#deps.onChange?.();
 
-    const outcome = await this.#deps.driver.wake({
+    // The ledger is hers, not the chat's: aggregate every session's open intents
+    // (deduped by text fingerprint) so a wake in her own room still sees what a
+    // real conversation left open.
+    const seenText = new Set<string>();
+    const ledger: Intent[] = [];
+    for (const sid of [sessionId, ...this.#deps.state.sessionIds()]) {
+      const entry = this.#deps.state.session(sid);
+      if (entry === undefined) continue;
+      for (const intent of entry.intents) {
+        if (!isOpen(intent)) continue;
+        const key = fingerprint(intent.text);
+        if (seenText.has(key)) continue;
+        seenText.add(key);
+        ledger.push(intent);
+      }
+    }
+    openIntents = ledger;
+
+    // Scored before the turn so the framing can rank what she left open; the
+    // ranking never decides *whether* to wake, only what gets foregrounded.
+    const candidates: Candidate[] = openIntents.map((intent) => ({
+      id: intent.id,
+      text: intent.text,
+      kind: intent.kind,
+      ...(intent.dueAt === undefined ? {} : { dueAt: intent.dueAt }),
+      ...(intent.preferredAt === undefined ? {} : { preferredAt: intent.preferredAt }),
+      source: intent.source,
+    }));
+    const scored = config.scoreEnabled
+      ? selectCandidates(rankCandidates(candidates, { now, recent: recentNotes }), {
+          threshold: config.scoreThreshold,
+          max: MAX_RANKED,
+        }).map((entry) => ({
+          text: entry.text,
+          kind: entry.kind,
+          score: entry.score,
+          why: explain(entry, now),
+        }))
+      : [];
+
+    const outcome = await this.#driveWake({
       sessionId,
       runId,
       trigger,
@@ -313,6 +384,7 @@ export class Scheduler {
         ...(intent.dueAt === undefined ? {} : { dueAt: intent.dueAt }),
         ...(isOverdue(intent, new Date(now)) ? { overdue: true } : {}),
       })),
+      ...(scored.length === 0 ? {} : { candidates: scored }),
       ...(config.motivation.trim() === '' ? {} : { motivation: config.motivation }),
     });
 

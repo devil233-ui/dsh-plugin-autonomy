@@ -56,8 +56,18 @@ export interface AutonomyConfig {
    * the last speaker was a guest, which is exactly what a wake must not hit).
    */
   wakeSession: string;
-  /** `autonomy_say` destinations (`group:<id>` / `private:<qq>`); empty disables speaking. */
+  /**
+   * Chats she has spoken to before (`group:<id>` / `private:<qq>`).
+   *
+   * A hint shown in the prompt, not an allowlist: she may point `autonomy_say`
+   * anywhere the address form is legal, and aura's own outbound rules decide
+   * what actually leaves the host.
+   */
   speakTargets: string[];
+  /** Rank open intents by a recomputable score before an autonomous turn. */
+  scoreEnabled: boolean;
+  /** Items scoring below this stay off the prompt; the intents themselves stay open. */
+  scoreThreshold: number;
   /** Whether the scheduler runs at all. */
   enabled: boolean;
   /** Lines of judgement history kept per session. */
@@ -87,6 +97,8 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   sessions: [],
   wakeSession: '',
   speakTargets: [],
+  scoreEnabled: true,
+  scoreThreshold: 0.5,
   enabled: true,
   maxRuns: 20,
   maxIntents: 50,
@@ -155,6 +167,8 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     sessions: stringArrayOr(input.sessions, base.sessions),
     wakeSession: textOr(input.wakeSession, base.wakeSession),
     speakTargets: stringArrayOr(input.speakTargets, base.speakTargets),
+    scoreEnabled: booleanOr(input.scoreEnabled, base.scoreEnabled),
+    scoreThreshold: numberOr(input.scoreThreshold, base.scoreThreshold, 0, 1),
     enabled: booleanOr(input.enabled, base.enabled),
     maxRuns: Math.round(numberOr(input.maxRuns, base.maxRuns, 1, 200)),
     maxIntents: Math.round(numberOr(input.maxIntents, base.maxIntents, 1, 500)),

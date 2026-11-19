@@ -10,11 +10,9 @@
  *     the model's own claim, so a silent turn is recorded as silent.
  */
 
-import type { Agent } from '@deepseek-ai/dsh-agent';
-
 import { createFramingMessage, type WakeTrigger } from './framing.js';
 import { observeTurn, type TurnObservation } from './observer.js';
-import { asLiveAgent, sessionLogOf, type AgentsFacade, type LiveAgent } from './types.js';
+import { sessionLogOf, type AgentsFacade, type LiveAgent } from './types.js';
 
 export type WakeStatus = 'ok' | 'busy' | 'unavailable' | 'error';
 
@@ -31,6 +29,8 @@ export interface WakeRequest {
   trigger: WakeTrigger;
   note?: string;
   openIntents: readonly { text: string; kind: string; dueAt?: string; overdue?: boolean }[];
+  /** Scored intents for this moment, already filtered and capped by the caller. */
+  candidates?: readonly { text: string; kind: string; score: number; why: string }[];
   /** Config override for the "decide what to do" paragraph. */
   motivation?: string;
 }
@@ -65,14 +65,32 @@ export interface SessionControllerLike {
 
 const DEFAULT_MAX_TURN_MS = 15 * 60 * 1000;
 
-/** 控制器可能直接回 agent，也可能回 `{ agent }` / `{ error }`。 */
+/**
+ * Does this object actually carry the live agent surface?
+ *
+ * `agents.get` / `resolveAgent` are loosely typed, so a blind cast would happily
+ * accept `{ agent }`, `{ error }` or a resume handle as if it were an agent; the
+ * first thing we do with it is read `.session.seq`, which then throws inside an
+ * async wake and takes the whole host down under DSH's fail-loud policy.
+ */
+function looksLikeAgent(value: unknown): value is LiveAgent {
+  if (value === undefined || value === null || typeof value !== 'object') return false;
+  const probe = value as Partial<LiveAgent>;
+  const session = probe.session as { seq?: unknown } | undefined;
+  return (
+    typeof probe.followup === 'function' &&
+    session !== undefined &&
+    session !== null &&
+    typeof session.seq === 'number'
+  );
+}
+
+/** 控制器可能直接回 agent，也可能回 `{ agent }` / `{ error }` / resume 句柄。 */
 function pickAgent(value: unknown): { agent?: LiveAgent; error?: string } {
-  if (value === undefined || value === null) return {};
-  const direct = asLiveAgent(value as unknown as Agent | undefined);
-  if (direct !== undefined) return { agent: direct };
+  if (looksLikeAgent(value)) return { agent: value };
+  if (value === undefined || value === null || typeof value !== 'object') return {};
   const bag = value as { agent?: unknown; error?: { message?: unknown } | string };
-  const nested = asLiveAgent(bag.agent as unknown as Agent | undefined);
-  if (nested !== undefined) return { agent: nested };
+  if (looksLikeAgent(bag.agent)) return { agent: bag.agent };
   const error = bag.error;
   if (error === undefined) return {};
   return { error: typeof error === 'string' ? error : String(error.message ?? 'unknown error') };
@@ -87,8 +105,8 @@ export class WakeDriver {
 
   /** Resolve a live agent, resuming the session when it is cold. */
   async #resolve(sessionId: string): Promise<{ agent?: LiveAgent; resumed?: boolean; error?: string }> {
-    const live = asLiveAgent(this.#deps.agents.get(sessionId));
-    if (live !== undefined) return { agent: live };
+    const live = this.#deps.agents.get(sessionId);
+    if (looksLikeAgent(live)) return { agent: live };
 
     // 优先走宿主的会话控制器：它按会话记录的预设与模型恢复，和界面/QQ 进来的
     // 那一轮是同一套装配。裸 resume 只给了会话 id，模型就丢了。
@@ -108,13 +126,31 @@ export class WakeDriver {
     }
     try {
       const handle = await this.#deps.agents.resume({ resumeSessionId: sessionId });
-      return { agent: handle.agent, resumed: true };
+      if (looksLikeAgent(handle)) return { agent: handle, resumed: true };
+      const resumed = pickAgent(handle);
+      if (resumed.agent !== undefined) return { agent: resumed.agent, resumed: true };
+      return { error: resumed.error ?? 'resume returned no agent' };
     } catch (error) {
       return { error: `resume failed: ${String(error)}` };
     }
   }
 
+  /**
+   * Never throws: an unhandled rejection inside a wake takes the whole host down
+   * (DSH exits on uncaught exceptions), and a failed wake is a recorded outcome,
+   * not a crash.
+   */
   async wake(request: WakeRequest): Promise<WakeOutcome> {
+    try {
+      return await this.#wake(request);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.#deps.logger.warn(`wake ${request.runId} threw: ${message}`);
+      return { status: 'error', sessionId: request.sessionId, error: `wake threw: ${message}` };
+    }
+  }
+
+  async #wake(request: WakeRequest): Promise<WakeOutcome> {
     const resolved = await this.#resolve(request.sessionId);
     if (resolved.agent === undefined) {
       return {
@@ -124,6 +160,9 @@ export class WakeDriver {
       };
     }
     const agent = resolved.agent;
+    if (agent.session === undefined || agent.session === null) {
+      return { status: 'error', sessionId: request.sessionId, error: 'resolved agent has no session log' };
+    }
     const startIndex = agent.session.seq;
     const message = createFramingMessage({
       runId: request.runId,
@@ -132,6 +171,7 @@ export class WakeDriver {
       now: new Date(),
       ...(request.note === undefined ? {} : { note: request.note }),
       openIntents: request.openIntents,
+      ...(request.candidates === undefined ? {} : { candidates: request.candidates }),
       timeZone: this.#deps.timeZone,
       speakTargets: this.#deps.speakTargets?.() ?? [],
       ...(request.motivation === undefined || request.motivation.trim() === ""

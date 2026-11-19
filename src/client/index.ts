@@ -52,6 +52,8 @@ interface ConfigView {
   sessions: string[];
   wakeSession: string;
   speakTargets: string[];
+  scoreEnabled: boolean;
+  scoreThreshold: number;
   enabled: boolean;
 }
 
@@ -253,7 +255,7 @@ export function apply(ctx: Context): void {
           patch[key] = raw.split(',').map((part) => part.trim()).filter((part) => part !== '');
         } else if (key === 'mode') {
           patch[key] = raw.trim();
-        } else if (key === 'enabled' || key === 'selfWakeDuringSleep' || key === 'allowSelfWake') {
+        } else if (key === 'enabled' || key === 'selfWakeDuringSleep' || key === 'allowSelfWake' || key === 'scoreEnabled') {
           patch[key] = raw.trim() === 'true';
         } else {
           const number = Number(raw);
@@ -296,7 +298,9 @@ export function apply(ctx: Context): void {
         field('maxRunsPerDay', '每日上限（0 = 不限）', config?.maxRunsPerDay ?? 20, true),
         field('minIdleMinutes', '最近活动后跳过（分钟）', config?.minIdleMinutes ?? 0, true),
         field('wakeSession', '唤醒落点（留空 = 按下面的目标会话列表）', config?.wakeSession ?? ''),
-        field('speakTargets', '许她说话的去处（group:群号 / private:QQ号，逗号分隔）', (config?.speakTargets ?? []).join(',')),
+        field('speakTargets', '她说过的去处（只是提示，想在哪说由她自己定；group:群号 / private:QQ号，逗号分隔）', (config?.speakTargets ?? []).join(',')),
+        field('scoreEnabled', '唤醒时给意图打分（true / false）', String(config?.scoreEnabled ?? true)),
+        field('scoreThreshold', '打分门槛（0-1，低于此不进提示）', config?.scoreThreshold ?? 0.5, true),
         field('sessions', '目标会话（留空 = 全部根会话；唤醒落点非空时忽略）', (config?.sessions ?? []).join(',')),
         field('timezone', '时区（留空 = 宿主时区）', config?.timezone ?? ''),
         field('allowSelfWake', '允许她自排唤醒（true / false）', String(config?.allowSelfWake ?? true)),
