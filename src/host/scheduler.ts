@@ -38,6 +38,11 @@ export interface SchedulerDeps {
   logger: { warn(message: string): void; info?(message: string): void };
   /** Notified after every judgement so the panel can refresh. */
   onChange?: () => void;
+  /**
+   * 投递排队的发言（`autonomy_say` 的 when_free）。每轮扫描先跑它：这一步与
+   * 掷骰无关，谁都不该因为它而被提前唤醒。
+   */
+  drainOutbox?: () => Promise<void>;
 }
 
 const SWEEP_MS = 15_000;
@@ -188,6 +193,13 @@ export class Scheduler {
     try {
       const config = this.#deps.config();
       if (!config.enabled) return;
+      if (this.#deps.drainOutbox !== undefined) {
+        try {
+          await this.#deps.drainOutbox();
+        } catch (error) {
+          this.#deps.logger.warn(`dsh-autonomy: outbox sweep failed (${String(error)})`);
+        }
+      }
       const now = this.#now();
       for (const sessionId of this.managedSessions()) {
         if (this.#stopped) return;

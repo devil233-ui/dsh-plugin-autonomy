@@ -9,6 +9,7 @@
 
 import type { Context } from '@deepseek-ai/cordis';
 
+import type { OutboxItem } from '../core/outbox.js';
 import { formatLocalStamp } from '../core/schedule.js';
 import { createIntent, isOpen, settleIntent, type Intent } from '../core/intent.js';
 import { fingerprint } from '../core/score.js';
@@ -70,6 +71,8 @@ export interface PanelSnapshot {
   sessions: SessionRow[];
   /** Every recorded judgement since local midnight, newest first, across sessions. */
   todayRuns: RunRecord[];
+  /** 排队等她说话的消息（新的在前，含刚发出/作废的几条，便于回看）。 */
+  outbox: OutboxItem[];
 }
 
 /** Filters the standalone page sends; every field is optional. */
@@ -274,7 +277,9 @@ export class PanelService {
       }
     }
     todayRuns.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
-    return { now, timeZone: zone, dataDir: this.#deps.dataDir, config, sessions, todayRuns };
+    const room = config.wakeSession.trim();
+    const outbox = room === '' ? [] : [...(this.#deps.state.session(room)?.outbox ?? [])].reverse().slice(0, 8);
+    return { now, timeZone: zone, dataDir: this.#deps.dataDir, config, sessions, todayRuns, outbox };
   }
 
   /**

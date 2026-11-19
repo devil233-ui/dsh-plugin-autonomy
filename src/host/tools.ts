@@ -19,6 +19,7 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
 
 import { createIntent, reviseIntent, settleIntent, isOpen, remindAt, type Intent } from '../core/intent.js';
 import { canFinish, settleRun } from '../core/run.js';
+import { enqueueOutbox, type OutboxItem } from '../core/outbox.js';
 import { interjectionDenied, parseSpeakEvents, speakDenied } from '../core/speak.js';
 import type { AutonomyConfig } from './settings.js';
 import type { Scheduler } from './scheduler.js';
@@ -347,9 +348,13 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
     defineTool({
       name: 'autonomy_say',
       description:
-        'Speak through the aura bot (QQ) from an autonomous turn. target must be one of the chats the operator whitelisted; anything else is refused here before it reaches the bot. The aura bot still applies its own rules on top and reports back what happened. Use it when saying something is worth more than staying silent — most wakes end without it.',
+        'Speak through the aura bot (QQ) from an autonomous turn. The owner in private is always reachable by omitting target; other chats must be whitelisted. A chat where someone is waiting for her answer, or the same chat inside the cooldown window, is refused — pass when_free to queue it instead and have it delivered once the chat goes quiet (it expires after outboxTtlMinutes). The aura bot still applies its own rules and reports back what happened. Use it when saying something is worth more than staying silent — most wakes end without it.',
       parameters: {
-        target: { type: 'string', required: true, description: 'A whitelisted chat: group:<qq> or private:<qq>.' },
+        target: { type: 'string', required: true, description: 'A whitelisted chat: group:<qq> or private:<qq>. Omit (empty) to message the owner in private.' },
+        when_free: {
+          type: 'boolean',
+          description: 'Queue instead of failing when the chat is busy or inside the cooldown; delivered on a later sweep, expires after outboxTtlMinutes.',
+        },
         text: { type: 'string', required: true, description: 'What to say. Aura splits it into bubbles on its own rules.' },
       },
       output: { schema: { type: 'object', additionalProperties: true }, render: renderValue },
@@ -358,14 +363,43 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         const target = str(args['target']).trim();
         if (text === '') return json({ error: 'text is empty' });
         const config = services.config();
+        const whenFree = args['when_free'] === true;
+        // A refusal is not a dead end: with when_free she parks the sentence in
+        // the ledger's outbox and a later sweep delivers it once the chat is
+        // quiet. It expires, because a reply to a ten-minute-old line is worse
+        // than silence.
+        const refuse = (reason: string): Record<string, JsonValue> => {
+          if (!whenFree) return json({ error: reason });
+          const ttlMs = config.outboxTtlMinutes * 60_000;
+          if (ttlMs <= 0) return json({ error: `${reason}; queueing is off (outboxTtlMinutes = 0)` });
+          const room = config.wakeSession.trim();
+          const home = room === '' ? sessionId : room;
+          const id = `o${Date.now().toString(16)}${Math.random().toString(16).slice(2, 6)}`;
+          let queued: OutboxItem | undefined;
+          services.state.update(
+            home,
+            (state) => {
+              state.outbox = enqueueOutbox(state.outbox ?? [], { id, target, text, now: services.now(), ttlMs });
+              queued = state.outbox.find((item) => item.id === id);
+            },
+            services.now(),
+          );
+          return json({
+            queued: queued !== undefined,
+            id,
+            target: target === '' ? 'owner private' : target,
+            expires_in_minutes: config.outboxTtlMinutes,
+            why_queued: reason,
+          });
+        };
         const denied = speakDenied(target, config.speakTargets);
-        if (denied !== '') return json({ error: denied });
+        if (denied !== '') return refuse(denied);
         // Do not cut into a live exchange: re-derived from the bot's own ring
         // buffer, so no extra bookkeeping is kept here.
         if (services.recentEvents !== undefined) {
           const events = parseSpeakEvents(await services.recentEvents());
           const cuttingIn = interjectionDenied(target, events, services.now(), config.speakCooldownMinutes * 60_000);
-          if (cuttingIn !== '') return json({ error: cuttingIn });
+          if (cuttingIn !== '') return refuse(cuttingIn);
         }
         if (services.say === undefined) return json({ error: 'the aura bot bridge is not available in this host' });
         try {

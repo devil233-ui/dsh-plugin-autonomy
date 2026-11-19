@@ -67,6 +67,8 @@ export interface AutonomyConfig {
   speakTargets: string[];
   /** Minutes to wait before speaking in the same chat again; 0 disables it. */
   speakCooldownMinutes: number;
+  /** 排队等待的空话最多存多久（分钟）；0 = 不排队，只拒绝。 */
+  outboxTtlMinutes: number;
   /** Rank open intents by a recomputable score before an autonomous turn. */
   scoreEnabled: boolean;
   /** Items scoring below this stay off the prompt; the intents themselves stay open. */
@@ -101,6 +103,7 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   wakeSession: '',
   speakTargets: [],
   speakCooldownMinutes: 3,
+  outboxTtlMinutes: 10,
   scoreEnabled: true,
   scoreThreshold: 0.5,
   enabled: true,
@@ -172,6 +175,7 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     wakeSession: textOr(input.wakeSession, base.wakeSession),
     speakTargets: stringArrayOr(input.speakTargets, base.speakTargets),
     speakCooldownMinutes: Math.round(numberOr(input.speakCooldownMinutes, base.speakCooldownMinutes, 0, 120)),
+    outboxTtlMinutes: Math.round(numberOr(input.outboxTtlMinutes, base.outboxTtlMinutes, 0, 240)),
     scoreEnabled: booleanOr(input.scoreEnabled, base.scoreEnabled),
     scoreThreshold: numberOr(input.scoreThreshold, base.scoreThreshold, 0, 1),
     enabled: booleanOr(input.enabled, base.enabled),

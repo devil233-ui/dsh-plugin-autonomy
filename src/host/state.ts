@@ -12,6 +12,8 @@ import { dirname, join } from 'node:path';
 
 import type { Intent } from '../core/intent.js';
 import { trimIntents } from '../core/intent.js';
+import type { OutboxItem } from '../core/outbox.js';
+import { trimOutbox } from '../core/outbox.js';
 import type { RunRecord } from '../core/run.js';
 import { trimRuns } from '../core/run.js';
 
@@ -40,6 +42,11 @@ export interface SessionState {
   lastSelfWake?: SelfWake & { firedAt: number };
   intents: Intent[];
   runs: RunRecord[];
+  /**
+   * 排队等她说话的目标空下来再投的消息（`autonomy_say` 的 when_free）。
+   * 可选：老状态文件里没有这一栏，读出来按空队列处理，不为此升版本号。
+   */
+  outbox?: OutboxItem[];
   /**
    * Recently applied autonomy_schedule requestIds (newest last, capped).
    * Re-sending the same request must not reschedule anything (whalelife's
@@ -71,6 +78,7 @@ export function emptySession(sessionId: string, nextCheckAt: number): SessionSta
     nextCheckAt,
     intents: [],
     runs: [],
+    outbox: [],
     counterRuns: 0,
   };
 }
@@ -145,6 +153,7 @@ export class StateStore {
     if (session === undefined) return undefined;
     mutate(session);
     session.intents = trimIntents(session.intents, this.#maxIntents);
+    session.outbox = trimOutbox(session.outbox ?? []);
     session.runs = trimRuns(session.runs, this.#maxRuns);
     this.flush();
     return session;

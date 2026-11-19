@@ -62,6 +62,13 @@ const TABS: Array<{ id: Tab; label: string }> = [
 const pageCount = (total: number, limit: number): number => Math.max(1, Math.ceil(total / Math.max(limit, 1)));
 
 /** Dedupe the wake room's cross-session aggregation by intent id. */
+function outboxTag(status: string): string {
+  if (status === 'pending') return '排着';
+  if (status === 'sent') return '已发';
+  if (status === 'expired') return '过期';
+  return '没发成';
+}
+
 function ledgerRows(sessions: readonly SessionRow[], which: 'open' | 'settled'): LedgerEntry[] {
   const seen = new Set<string>();
   const out: LedgerEntry[] = [];
@@ -357,8 +364,26 @@ export function AutonomyPage(): ReactElement {
         ),
     );
 
+  const outboxRows = snapshot?.outbox ?? [];
+  const outboxSection = (): ReactElement | null => {
+    if (outboxRows.length === 0) return null;
+    return React.createElement('div', { className: 'da-section' },
+      React.createElement('div', { className: 'da-section-head' },
+        React.createElement('span', { className: 'da-section-title' }, `待发的话（${outboxRows.filter((item) => item.status === 'pending').length}）`),
+        React.createElement('span', { className: 'da-meta' }, '当时发不出去、她自己选排队的；目标一空就发，过期作废'),
+      ),
+      React.createElement('div', { className: 'da-list' }, ...outboxRows.map((item) => React.createElement('div', { className: 'da-item', key: item.id },
+        React.createElement('span', { className: item.status === 'pending' ? 'da-tag good' : 'da-tag' }, outboxTag(item.status)),
+        React.createElement('span', { className: 'da-item-text' }, item.text),
+        React.createElement('span', { className: 'da-meta' }, item.target === '' ? '主人私聊' : item.target),
+        React.createElement('span', { className: 'da-meta' }, item.status === 'pending' ? `至 ${fmtTime(item.expiresAt)}` : fmtTime(item.createdAt)),
+      ))),
+    );
+  };
+
   const ledgerTab = (): ReactElement =>
     React.createElement('div', { className: 'da-body' },
+      outboxSection(),
       React.createElement('div', { className: 'da-section' },
         React.createElement('div', { className: 'da-section-head' },
           React.createElement('span', { className: 'da-section-title' }, `未完成（${openLedger.length}）`),

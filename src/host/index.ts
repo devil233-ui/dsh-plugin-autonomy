@@ -24,6 +24,8 @@ import { join } from 'node:path';
 import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 
+import { markOutbox, pendingItems, sweepExpired } from '../core/outbox.js';
+import { interjectionDenied, parseSpeakEvents, speakDenied } from '../core/speak.js';
 import { loadConfig, saveConfig, type AutonomyConfig } from './settings.js';
 import { StateStore } from './state.js';
 import { Scheduler } from './scheduler.js';
@@ -81,6 +83,9 @@ export function apply(ctx: Context): void {
     },
   });
   let panel: PanelService | undefined;
+  // 排队消息的投递口：调度器每 15 秒扫一遍，服务对象在同一次 apply 里稍后才
+  // 构造好，所以这里先留一个可替换的引用。
+  let drainOutboxRef: (() => Promise<void>) | undefined;
   const scheduler = new Scheduler({
     config: () => config,
     state,
@@ -90,6 +95,9 @@ export function apply(ctx: Context): void {
     logger,
     onChange: () => {
       panel?.notify();
+    },
+    drainOutbox: async () => {
+      await drainOutboxRef?.();
     },
   });
 
@@ -165,6 +173,44 @@ export function apply(ctx: Context): void {
       }
       return undefined;
     },
+  };
+
+  // 投递排在队里的话：目标一空下来就发，过期就作废。判定与 autonomy_say 用
+  // 同一组纯函数，所以排队前后的行为完全一致。
+  drainOutboxRef = async (): Promise<void> => {
+    const room = config.wakeSession.trim();
+    if (room === '') return;
+    const queued = state.session(room)?.outbox ?? [];
+    if (queued.length === 0) return;
+    state.update(room, (session) => {
+      session.outbox = sweepExpired(session.outbox ?? [], Date.now());
+    }, Date.now());
+    for (const item of pendingItems(state.session(room)?.outbox ?? [])) {
+      if (speakDenied(item.target, config.speakTargets) !== '') continue;
+      const blocked = interjectionDenied(
+        item.target,
+        parseSpeakEvents(await services.recentEvents()),
+        Date.now(),
+        config.speakCooldownMinutes * 60_000,
+      );
+      if (blocked !== '') continue;
+      let delivered: { ok?: boolean; message?: string } = { ok: false };
+      try {
+        delivered = (await services.say(item.target, item.text)) as { ok?: boolean; message?: string };
+      } catch (error) {
+        delivered = { ok: false, message: error instanceof Error ? error.message : String(error) };
+      }
+      const sent = delivered.ok === true;
+      state.update(room, (session) => {
+        session.outbox = markOutbox(
+          session.outbox ?? [],
+          item.id,
+          sent ? 'sent' : 'failed',
+          sent ? (delivered.message ?? 'sent') : (delivered.message ?? 'send failed'),
+        );
+      }, Date.now());
+      logger.info(`[autonomy] outbox ${item.id} → ${item.target === '' ? 'owner private' : item.target}: ${sent ? 'sent' : 'failed'}`);
+    }
   };
 
   // Tools live on the agent scope, so they are re-registered for every root

@@ -80,6 +80,16 @@ export interface SessionRow {
   runs: RunRow[];
 }
 
+export interface OutboxRow {
+  id: string;
+  target: string;
+  text: string;
+  status: 'pending' | 'sent' | 'expired' | 'failed';
+  createdAt: number;
+  expiresAt: number;
+  note?: string;
+}
+
 export interface Snapshot {
   now: number;
   timeZone: string;
@@ -87,6 +97,7 @@ export interface Snapshot {
   config: ConfigView;
   sessions: SessionRow[];
   todayRuns: RunRow[];
+  outbox: OutboxRow[];
 }
 
 export interface RunsPage {
