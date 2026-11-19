@@ -19,7 +19,7 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
 
 import { createIntent, reviseIntent, settleIntent, isOpen, remindAt, type Intent } from '../core/intent.js';
 import { canFinish, settleRun } from '../core/run.js';
-import { isSpeakTarget, malformedTargetMessage } from '../core/speak.js';
+import { speakDenied } from '../core/speak.js';
 import type { AutonomyConfig } from './settings.js';
 import type { Scheduler } from './scheduler.js';
 import { MAX_SEEN_REQUESTS, type SessionState, type StateStore } from './state.js';
@@ -342,9 +342,9 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
     defineTool({
       name: 'autonomy_say',
       description:
-        'Speak through the aura bot (QQ) from an autonomous turn. Pick the chat yourself with target, or leave target out to reach the owner in private; whether the message actually leaves is up to the aura bot, which reports back what happened. Use it when saying something is worth more than staying silent — most wakes end without it.',
+        'Speak through the aura bot (QQ) from an autonomous turn. target must be one of the chats the operator whitelisted; anything else is refused here before it reaches the bot. The aura bot still applies its own rules on top and reports back what happened. Use it when saying something is worth more than staying silent — most wakes end without it.',
       parameters: {
-        target: { type: 'string', description: 'Any chat address of the form group:<qq> or private:<qq>. Omit to reach the owner in private.' },
+        target: { type: 'string', required: true, description: 'A whitelisted chat: group:<qq> or private:<qq>.' },
         text: { type: 'string', required: true, description: 'What to say. Aura splits it into bubbles on its own rules.' },
       },
       output: { schema: { type: 'object', additionalProperties: true }, render: renderValue },
@@ -352,7 +352,8 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         const text = str(args['text']).trim();
         const target = str(args['target']).trim();
         if (text === '') return json({ error: 'text is empty' });
-        if (!isSpeakTarget(target)) return json({ error: malformedTargetMessage(target) });
+        const denied = speakDenied(target, services.config().speakTargets);
+        if (denied !== '') return json({ error: denied });
         if (services.say === undefined) return json({ error: 'the aura bot bridge is not available in this host' });
         try {
           const result = await services.say(target, text);

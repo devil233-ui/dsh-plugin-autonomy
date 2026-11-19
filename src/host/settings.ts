@@ -57,11 +57,12 @@ export interface AutonomyConfig {
    */
   wakeSession: string;
   /**
-   * Chats she has spoken to before (`group:<id>` / `private:<qq>`).
+   * The only chats `autonomy_say` may point at (`group:<id>` / `private:<qq>`).
    *
-   * A hint shown in the prompt, not an allowlist: she may point `autonomy_say`
-   * anywhere the address form is legal, and aura's own outbound rules decide
-   * what actually leaves the host.
+   * An enforced allowlist, empty by default: while it is empty an autonomous
+   * turn cannot send anything. Aura's outbound rules still apply on top, but
+   * they are a share gate that also rate-limits by mood and activity, so they
+   * cannot stand in for a policy of our own.
    */
   speakTargets: string[];
   /** Rank open intents by a recomputable score before an autonomous turn. */

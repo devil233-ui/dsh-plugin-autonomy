@@ -31,7 +31,7 @@ export interface FramingInput {
   timeZone: string;
   /** Replaces the built-in "decide what to do" paragraph when non-empty. */
   motivation?: string;
-  /** Chats she used before; a hint for the prompt, not a limit on what she may pick. */
+  /** Chats the operator whitelisted. Empty means this turn cannot send at all. */
   speakTargets?: readonly string[];
   /** Scored intents for this moment, highest first. Empty means nothing cleared the bar. */
   candidates?: readonly { text: string; kind: string; score: number; why: string }[];
@@ -104,13 +104,15 @@ export function renderFramingText(input: FramingInput): string {
     'You may also record an intent for later with autonomy_intents, or schedule your own wake with autonomy_schedule.',
   );
   const speakTargets = input.speakTargets ?? [];
-  const known =
-    speakTargets.length > 0
-      ? ` Chats you have used before: ${speakTargets.join(', ')}.`
-      : '';
-  lines.push(
-    `If speaking is the right move, use autonomy_say({ text }) to reach the owner in private, or autonomy_say({ target: 'group:<id>' | 'private:<qq>', text }) to pick any chat yourself.${known} Whether it actually leaves is decided by the aura bot's own outbound rules, and it reports back what happened.`,
-  );
+  if (speakTargets.length === 0) {
+    lines.push(
+      'You cannot send any message this turn: no chat is whitelisted for you. Work inside the workspace, or leave a note as an intent for when a channel opens.',
+    );
+  } else {
+    lines.push(
+      `If speaking is the right move, use autonomy_say({ target, text }) with one of the whitelisted chats: ${speakTargets.join(', ')}. A chat outside that list is refused before it reaches the bot. The aura bot applies its own rules on top and reports back what happened.`,
+    );
+  }
   lines.push(
     'End this turn with autonomy_finish(run_id, decision, reason): decision is "acted" or "no_action", reason is one short sentence.',
   );
