@@ -22,6 +22,7 @@ import {
 } from '../core/schedule.js';
 import type { RunRecord, RunTrigger } from '../core/run.js';
 import { explain, fingerprint, rankCandidates, selectCandidates, type Candidate } from '../core/score.js';
+import { recallQuery } from '../core/recall.js';
 import { createRun, isTerminal, markInterrupted, markSettling, settleRun, startRun } from '../core/run.js';
 import { localDay, type StateStore } from './state.js';
 import { lastActivityEpoch } from './observer.js';
@@ -45,6 +46,8 @@ export interface SchedulerDeps {
   drainOutbox?: () => Promise<void>;
   /** 够数就复盘一次；与掷骰无关，不改任何会话的唤醒时间。 */
   review?: () => Promise<void>;
+  /** 醒来前查一遍记忆库；失败就当没有，不阻断唤醒。 */
+  recall?: (query: string) => Promise<string>;
 }
 
 const SWEEP_MS = 15_000;
@@ -399,6 +402,12 @@ export class Scheduler {
           why: explain(entry, now),
         }));
 
+    let memories = '';
+    if (this.#deps.recall !== undefined) {
+      const query = recallQuery({ candidates: scored, openIntents, note });
+      if (query !== '') memories = await this.#deps.recall(query).catch(() => '');
+    }
+
     const outcome = await this.#driveWake({
       sessionId,
       runId,
@@ -411,6 +420,7 @@ export class Scheduler {
         ...(isOverdue(intent, new Date(now)) ? { overdue: true } : {}),
       })),
       ...(scored.length === 0 ? {} : { candidates: scored }),
+      ...(memories === '' ? {} : { memories }),
       ...(config.motivation.trim() === '' ? {} : { motivation: config.motivation }),
     });
 

@@ -33,6 +33,7 @@ import { Reviewer } from './reviewer.js';
 import { WakeDriver, type SessionControllerLike } from './wake.js';
 import { registerAutonomyTools } from './tools.js';
 import { PanelService, installPanelRoutes } from './panel.js';
+import { MemoryRecall } from './recall.js';
 import type { AgentsFacade } from './types.js';
 import { PLUGIN_NAME } from './framing.js';
 
@@ -101,6 +102,7 @@ export function apply(ctx: Context): void {
     drainOutbox: async () => {
       await drainOutboxRef?.();
     },
+    recall: async (query) => memoryRecall.recall(query),
     review: async () => {
       await reviewRef?.();
     },
@@ -218,6 +220,15 @@ export function apply(ctx: Context): void {
     }
   };
 
+  // 召回走记忆库自己的只读接口；它跟 aura 无关，aura 那边只剩模型的系统回合。
+  const memoryRecall = new MemoryRecall({
+    url: () => config.recallUrl,
+    limit: () => config.recallLimit,
+    timeoutMs: () => config.recallTimeoutMs,
+    maxChars: () => config.recallMaxChars,
+    log: logger,
+  });
+
   // 复盘的模型通道走 aura 的系统回合（不占任何聊天），记忆走它的 memory 模块；
   // 两样都拿不到就退回确定性模板，复盘照做，只是不蒸馏。
   const reviewer = new Reviewer({
@@ -239,12 +250,19 @@ export function apply(ctx: Context): void {
       });
       return String(reply ?? '');
     },
+    // 写记忆默认关着：库那边只开了召回，memory 模块也停着，硬写只会得到
+    // 一句「模块没在跑」。真要用时开 reviewWriteMemory，失败照实返回给日志。
     remember: async (text) => {
+      if (!config.reviewWriteMemory) return 'reviewWriteMemory 关着，没写';
       const bridge = ctx.get('aurabot') as unknown as
         | { call?: (input: { module: string; method: string; args: unknown[] }) => Promise<unknown> }
         | undefined;
-      if (bridge === undefined || typeof bridge.call !== 'function') return;
-      await bridge.call({ module: 'memory', method: 'addEvent', args: [{ text, tags: ['自主', '复盘'], importance: 0.5 }] });
+      if (bridge === undefined || typeof bridge.call !== 'function') return 'aura bot 的 call 不可用';
+      const result = (await bridge.call({ module: 'memory', method: 'addEvent', args: [{ text, tags: ['自主', '复盘'], importance: 0.5 }] })) as
+        | { ok?: boolean; message?: string }
+        | undefined;
+      if (result?.ok !== true) return result?.message ?? '记忆模块没给回执';
+      return undefined;
     },
   });
   reviewRef = async (): Promise<void> => {

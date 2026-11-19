@@ -71,6 +71,17 @@ export const CONFIG_GROUPS: GroupSpec[] = [
       { key: 'reviewMinGapMinutes', label: '两次复盘至少间隔（分钟）', kind: 'number', step: '10' },
       { key: 'reviewMaxInputTokens', label: '复盘输入预算（token）', hint: '按 2 字符≈1 token 粗估，超了从最旧的记录开始裁', kind: 'number', step: '256' },
       { key: 'reviewMaxOutputTokens', label: '复盘输出预算（token）', kind: 'number', step: '64' },
+      { key: 'reviewWriteMemory', label: '复盘顺手写回记忆库', hint: '默认关：记忆库那边只开了召回，写要另一套接口', kind: 'bool' },
+    ],
+  },
+  {
+    title: '记忆召回',
+    fields: [
+      { key: 'recallEnabled', label: '醒来前先查记忆库', hint: '按这一轮的意图当关键词，把查到的几段塞进提示词；查不到就当没有', kind: 'bool' },
+      { key: 'recallUrl', label: '召回接口', hint: '默认指向本机 MemoryConstellations 的 /api/recall', kind: 'text' },
+      { key: 'recallLimit', label: '最多几条', kind: 'number', step: '1' },
+      { key: 'recallTimeoutMs', label: '超时（毫秒）', hint: '查不到就跳过，不耽误这一轮', kind: 'number', step: '100' },
+      { key: 'recallMaxChars', label: '最多塞多少字', kind: 'number', step: '50' },
     ],
   },
   {

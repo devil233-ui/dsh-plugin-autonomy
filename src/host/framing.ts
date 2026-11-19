@@ -35,6 +35,8 @@ export interface FramingInput {
   speakTargets?: readonly string[];
   /** Scored intents for this moment, highest first. Empty means nothing cleared the bar. */
   candidates?: readonly { text: string; kind: string; score: number; why: string }[];
+  /** 记忆库按这一轮的素材捞回来的旧事；空串等于这轮没有。 */
+  memories?: string;
 }
 
 /**
@@ -77,6 +79,14 @@ export function renderFramingText(input: FramingInput): string {
     // 上游 whalelife 的 intent-visibility 契约：未完成意图必须全部可见，
     // 所以这里不再截断，只受台账上限（MAX_INTENTS=50）约束。
     for (const intent of input.openIntents) lines.push(intentLine(intent, input.timeZone));
+  }
+  const memories = input.memories?.trim() ?? '';
+  if (memories !== '') {
+    lines.push('From your memory library (found by a keyword lookup on the items above; it can be stale or misremembered — what is happening now outranks it, and do not quote it back verbatim):');
+    for (const line of memories.split('\n')) {
+      const text = line.trim();
+      if (text !== '') lines.push(`  ${text}`);
+    }
   }
   const candidates = input.candidates ?? [];
   if (candidates.length > 0) {

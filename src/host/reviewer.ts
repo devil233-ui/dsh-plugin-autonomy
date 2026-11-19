@@ -80,10 +80,13 @@ export class Reviewer {
       this.#deps.log.warn(`[autonomy] review journal write failed (${String(error)})`);
     }
 
-    if (this.#deps.remember !== undefined) {
+    if (this.#deps.remember !== undefined && outcome.memoryDrafts.length > 0) {
       for (const draft of outcome.memoryDrafts.slice(0, 3)) {
         try {
-          await this.#deps.remember(draft);
+          const refused = await this.#deps.remember(draft);
+          if (typeof refused === 'string' && refused !== '') {
+            this.#deps.log.warn(`[autonomy] review memory not written: ${refused}`);
+          }
         } catch (error) {
           this.#deps.log.warn(`[autonomy] review memory write failed (${String(error)})`);
         }

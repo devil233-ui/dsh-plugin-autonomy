@@ -79,6 +79,15 @@ export interface AutonomyConfig {
   scoreEnabled: boolean;
   /** Items scoring below this stay off the prompt; the intents themselves stay open. */
   scoreThreshold: number;
+  /** 醒来前先查一遍记忆库，把查到的几段塞进这一轮的提示词。 */
+  recallEnabled: boolean;
+  /** 记忆库的只读召回接口（MemoryConstellations）。 */
+  recallUrl: string;
+  recallLimit: number;
+  recallTimeoutMs: number;
+  recallMaxChars: number;
+  /** 复盘顺手把蒸馏出的几条写回记忆库；默认关（那边现在是只读召回）。 */
+  reviewWriteMemory: boolean;
   /** Whether the scheduler runs at all. */
   enabled: boolean;
   /** Lines of judgement history kept per session. */
@@ -117,6 +126,12 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   reviewMinGapMinutes: 120,
   reviewMaxInputTokens: 4096,
   reviewMaxOutputTokens: 512,
+  recallEnabled: true,
+  recallUrl: 'http://127.0.0.1:3100/api/recall',
+  recallLimit: 4,
+  recallTimeoutMs: 1200,
+  recallMaxChars: 600,
+  reviewWriteMemory: false,
   enabled: true,
   maxRuns: 20,
   maxIntents: 50,
@@ -194,6 +209,12 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     reviewMinGapMinutes: Math.round(numberOr(input.reviewMinGapMinutes, base.reviewMinGapMinutes, 0, 1440)),
     reviewMaxInputTokens: Math.round(numberOr(input.reviewMaxInputTokens, base.reviewMaxInputTokens, 512, 65536)),
     reviewMaxOutputTokens: Math.round(numberOr(input.reviewMaxOutputTokens, base.reviewMaxOutputTokens, 128, 8192)),
+    recallEnabled: booleanOr(input.recallEnabled, base.recallEnabled),
+    recallUrl: textOr(input.recallUrl, base.recallUrl),
+    recallLimit: Math.round(numberOr(input.recallLimit, base.recallLimit, 1, 20)),
+    recallTimeoutMs: Math.round(numberOr(input.recallTimeoutMs, base.recallTimeoutMs, 200, 10_000)),
+    recallMaxChars: Math.round(numberOr(input.recallMaxChars, base.recallMaxChars, 100, 4000)),
+    reviewWriteMemory: booleanOr(input.reviewWriteMemory, base.reviewWriteMemory),
     enabled: booleanOr(input.enabled, base.enabled),
     maxRuns: Math.round(numberOr(input.maxRuns, base.maxRuns, 1, 200)),
     maxIntents: Math.round(numberOr(input.maxIntents, base.maxIntents, 1, 500)),

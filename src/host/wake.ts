@@ -33,6 +33,8 @@ export interface WakeRequest {
   candidates?: readonly { text: string; kind: string; score: number; why: string }[];
   /** Config override for the "decide what to do" paragraph. */
   motivation?: string;
+  /** 记忆库召回的那几段，原样交给 framing 渲染。 */
+  memories?: string;
 }
 
 export interface WakeDeps {
@@ -172,6 +174,7 @@ export class WakeDriver {
       ...(request.note === undefined ? {} : { note: request.note }),
       openIntents: request.openIntents,
       ...(request.candidates === undefined ? {} : { candidates: request.candidates }),
+      ...(request.memories === undefined || request.memories.trim() === "" ? {} : { memories: request.memories }),
       timeZone: this.#deps.timeZone,
       speakTargets: this.#deps.speakTargets?.() ?? [],
       ...(request.motivation === undefined || request.motivation.trim() === ""

@@ -369,3 +369,17 @@ test('ledger-settle：唤醒房间显示别人的账本行，点完成要落回�
   assert.equal(state.sessions['chat']?.intents[0]?.state, 'done');
   assert.equal(state.sessions['room']?.intents.length, 0);
 });
+
+test('wake-memory: 召回内容进提示词，带「可能过时」的告诫', () => {
+  const text = renderFramingText({
+    runId: 'r1',
+    sessionId: 's1',
+    trigger: 'random',
+    now: new Date('2026-11-20T02:00:00.000Z'),
+    openIntents: [{ text: '补发剧透群', kind: 'thought' }],
+    timeZone: 'Asia/Shanghai',
+    memories: '她说周三要交一份版本表',
+  });
+  assert.match(text, /From your memory library/);
+  assert.match(text, /she said she would hand in a version table|她说周三要交一份版本表/);
+});

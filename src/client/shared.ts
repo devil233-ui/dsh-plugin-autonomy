@@ -43,6 +43,12 @@ export interface ConfigView {
   reviewMinGapMinutes: number;
   reviewMaxInputTokens: number;
   reviewMaxOutputTokens: number;
+  recallEnabled: boolean;
+  recallUrl: string;
+  recallLimit: number;
+  recallTimeoutMs: number;
+  recallMaxChars: number;
+  reviewWriteMemory: boolean;
   enabled: boolean;
 }
 
