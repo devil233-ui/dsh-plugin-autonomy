@@ -256,7 +256,8 @@ const CSS = `
 .da-chip{height:26px;padding:0 11px;border-radius:999px;border:1px solid var(--da-border);background:transparent;color:var(--da-text-2);font:inherit;font-size:12px;cursor:pointer;}
 .da-chip:hover{background:var(--da-hover);}
 .da-chip.active{background:var(--da-accent);border-color:transparent;color:#fff;font-weight:600;}
-.da-list{display:flex;flex-direction:column;border:1px solid var(--da-border);border-radius:12px;overflow:hidden;}
+.da-body>*{flex-shrink:0;}
+.da-list{display:flex;flex-direction:column;border:1px solid var(--da-border);border-radius:12px;overflow:hidden;flex:none;}
 .da-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;font-size:12px;line-height:19px;border-top:1px solid var(--da-border);}
 .da-item:first-child{border-top:none;}
 .da-item:hover{background:var(--da-hover);}
