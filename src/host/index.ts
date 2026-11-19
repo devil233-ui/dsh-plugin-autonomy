@@ -154,6 +154,17 @@ export function apply(ctx: Context): void {
       }
       return target === '' ? await bridge.send({ text }) : await bridge.send({ target, text });
     },
+    recentEvents: async (): Promise<unknown> => {
+      try {
+        const bridge = ctx.get('aurabot') as unknown as {
+          events?: (query: { after?: number; limit?: number }) => Promise<unknown>;
+        };
+        if (typeof bridge.events === 'function') return await bridge.events({ after: 0, limit: 400 });
+      } catch {
+        // 拿不到就当没有可用的近期事件；守卫退化成只查名单。
+      }
+      return undefined;
+    },
   };
 
   // Tools live on the agent scope, so they are re-registered for every root

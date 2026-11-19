@@ -65,6 +65,8 @@ export interface AutonomyConfig {
    * cannot stand in for a policy of our own.
    */
   speakTargets: string[];
+  /** Minutes to wait before speaking in the same chat again; 0 disables it. */
+  speakCooldownMinutes: number;
   /** Rank open intents by a recomputable score before an autonomous turn. */
   scoreEnabled: boolean;
   /** Items scoring below this stay off the prompt; the intents themselves stay open. */
@@ -98,6 +100,7 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   sessions: [],
   wakeSession: '',
   speakTargets: [],
+  speakCooldownMinutes: 3,
   scoreEnabled: true,
   scoreThreshold: 0.5,
   enabled: true,
@@ -168,6 +171,7 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     sessions: stringArrayOr(input.sessions, base.sessions),
     wakeSession: textOr(input.wakeSession, base.wakeSession),
     speakTargets: stringArrayOr(input.speakTargets, base.speakTargets),
+    speakCooldownMinutes: Math.round(numberOr(input.speakCooldownMinutes, base.speakCooldownMinutes, 0, 120)),
     scoreEnabled: booleanOr(input.scoreEnabled, base.scoreEnabled),
     scoreThreshold: numberOr(input.scoreThreshold, base.scoreThreshold, 0, 1),
     enabled: booleanOr(input.enabled, base.enabled),

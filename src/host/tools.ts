@@ -19,7 +19,7 @@ type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string
 
 import { createIntent, reviseIntent, settleIntent, isOpen, remindAt, type Intent } from '../core/intent.js';
 import { canFinish, settleRun } from '../core/run.js';
-import { speakDenied } from '../core/speak.js';
+import { interjectionDenied, parseSpeakEvents, speakDenied } from '../core/speak.js';
 import type { AutonomyConfig } from './settings.js';
 import type { Scheduler } from './scheduler.js';
 import { MAX_SEEN_REQUESTS, type SessionState, type StateStore } from './state.js';
@@ -35,6 +35,11 @@ export interface ToolServices {
    * Absent when aura is not installed, which is a normal deployment.
    */
   say?(target: string, text: string): Promise<unknown>;
+  /**
+   * The aura bot's recent events (`ctx.get('aurabot').events`), used only to
+   * tell whether a chat is mid-exchange. Absent without aura as well.
+   */
+  recentEvents?(): Promise<unknown>;
 }
 
 function renderValue(_args: unknown, value: unknown): ContentBlock[] {
@@ -352,8 +357,16 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         const text = str(args['text']).trim();
         const target = str(args['target']).trim();
         if (text === '') return json({ error: 'text is empty' });
-        const denied = speakDenied(target, services.config().speakTargets);
+        const config = services.config();
+        const denied = speakDenied(target, config.speakTargets);
         if (denied !== '') return json({ error: denied });
+        // Do not cut into a live exchange: re-derived from the bot's own ring
+        // buffer, so no extra bookkeeping is kept here.
+        if (services.recentEvents !== undefined) {
+          const events = parseSpeakEvents(await services.recentEvents());
+          const cuttingIn = interjectionDenied(target, events, services.now(), config.speakCooldownMinutes * 60_000);
+          if (cuttingIn !== '') return json({ error: cuttingIn });
+        }
         if (services.say === undefined) return json({ error: 'the aura bot bridge is not available in this host' });
         try {
           const result = await services.say(target, text);

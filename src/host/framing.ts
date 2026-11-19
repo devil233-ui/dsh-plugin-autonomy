@@ -110,7 +110,7 @@ export function renderFramingText(input: FramingInput): string {
     );
   } else {
     lines.push(
-      `If speaking is the right move, use autonomy_say({ target, text }) with one of the whitelisted chats: ${speakTargets.join(', ')}. A chat outside that list is refused before it reaches the bot. The aura bot applies its own rules on top and reports back what happened.`,
+      `If speaking is the right move, use autonomy_say({ target, text }) with one of the whitelisted chats: ${speakTargets.join(', ')}. A chat outside that list is refused before it reaches the bot. Two more refusals: a chat where someone is still waiting for her answer, and the same chat again inside the cooldown window. The aura bot applies its own rules on top and reports back what happened.`,
     );
   }
   lines.push(
