@@ -58,6 +58,8 @@ export interface IntentRow {
   preferredAt?: string;
   reason?: string;
   createdAt?: string;
+  chill?: number;
+  parkedUntil?: string;
 }
 
 export interface RunRow {

@@ -414,7 +414,10 @@ export function AutonomyPage(): ReactElement {
           : React.createElement('div', { className: 'da-list' }, ...openLedger.map((intent) => React.createElement('div', { className: 'da-item', key: intent.id },
             React.createElement('span', { className: 'da-tag' }, intent.kind === 'agreement' ? '约定' : '想法'),
             React.createElement('span', { className: 'da-item-text' }, intent.text,
-              intent.dueAt === undefined ? null : React.createElement('span', { className: 'da-hint' }, ` · 到期 ${fmtTime(Date.parse(intent.dueAt))}`)),
+              intent.dueAt === undefined ? null : React.createElement('span', { className: 'da-hint' }, ` · 到期 ${fmtTime(Date.parse(intent.dueAt))}`),
+              intent.parkedUntil === undefined || Date.parse(intent.parkedUntil) <= Date.now()
+                ? null
+                : React.createElement('span', { className: 'da-hint', title: `连着 ${intent.chill ?? 0} 格没动手` }, ` · 暂停到 ${fmtTime(Date.parse(intent.parkedUntil))}`)),
             React.createElement('span', { className: 'da-meta' }, shortId(intent.sessionId)),
             React.createElement('button', {
               className: 'da-btn small',

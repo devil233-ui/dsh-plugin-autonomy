@@ -47,6 +47,10 @@ export interface IntentRow {
   preferredAt?: string;
   reason?: string;
   createdAt: string;
+  /** 已攒到几次没动手；到顶会进暂停期。 */
+  chill?: number;
+  /** 暂停到什么时候，过后自动回到候选里。 */
+  parkedUntil?: string;
 }
 
 export interface SessionRow {
@@ -120,6 +124,8 @@ function toRow(intent: Intent, ownerSessionId?: string): IntentRow {
     ...(intent.preferredAt === undefined ? {} : { preferredAt: intent.preferredAt }),
     ...(intent.reason === undefined ? {} : { reason: intent.reason }),
     createdAt: intent.createdAt,
+    ...(intent.chill === undefined ? {} : { chill: intent.chill }),
+    ...(intent.parkedUntil === undefined ? {} : { parkedUntil: intent.parkedUntil }),
   };
 }
 

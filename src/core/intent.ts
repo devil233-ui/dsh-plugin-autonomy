@@ -23,11 +23,21 @@ export interface Intent {
   dueAt?: string;
   reason?: string;
   version: number;
+  /** 攒起来的冷度：连续几轮没动手就往上涨，动手就清零。 */
+  chill?: number;
+  /** 冷度到顶后的暂停期；到期自动解冻，不必人工放行。 */
+  parkedUntil?: string;
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export const MAX_INTENTS = 50;
+/** 每一轮「开到眼前却没动手」加多少冷度。 */
+export const CHILL_PER_MISS = 0.5;
+/** 冷度到这里就暂停（0.5 × 4 轮）。 */
+export const CHILL_PARK_AT = 2;
+/** 暂停多久，到期自己解冻。 */
+export const PARK_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_INTENT_TEXT = 500;
 
 function newId(): string {
@@ -151,6 +161,37 @@ export function settleIntent(
   };
   if (reason !== undefined && reason.trim() !== "") next.reason = reason.trim();
   return { ok: true, value: next };
+}
+
+/** 还在暂停期里就不该再排到眼前。 */
+export function isParked(intent: Intent, now: number): boolean {
+  if (intent.parkedUntil === undefined) return false;
+  const until = Date.parse(intent.parkedUntil);
+  return Number.isFinite(until) && until > now;
+}
+
+/**
+ * 记一次「开到眼前但没动手」。冷度到顶就 park 一段时间；暂停期已过的
+ * 旧冷度先清掉再重新计，免得刚解冻就被下一轮立刻再关进去。
+ */
+export function recordMiss(intent: Intent, now: Date): Intent {
+  const fresh = !isParked(intent, now.getTime()) && intent.parkedUntil !== undefined ? 0 : (intent.chill ?? 0);
+  const chill = Number((fresh + CHILL_PER_MISS).toFixed(2));
+  const next: Intent = { ...intent, chill };
+  if (chill >= CHILL_PARK_AT) {
+    next.parkedUntil = new Date(now.getTime() + PARK_MS).toISOString();
+  } else {
+    delete next.parkedUntil;
+  }
+  return next;
+}
+
+/** 记一次真的动了手：冷度清零，暂停解除。 */
+export function recordHit(intent: Intent, now: Date): Intent {
+  const next: Intent = { ...intent, updatedAt: now.toISOString() };
+  delete next.chill;
+  delete next.parkedUntil;
+  return next;
 }
 
 export function isOpen(intent: Intent): boolean {

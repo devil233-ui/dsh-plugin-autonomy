@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Intent } from '../core/intent.js';
-import { isOpen, isOverdue } from '../core/intent.js';
+import { isOpen, isOverdue, isParked, recordHit, recordMiss } from '../core/intent.js';
 import {
   isSleepingAt,
   minutesOfDay,
@@ -364,6 +364,8 @@ export class Scheduler {
       if (entry === undefined) continue;
       for (const intent of entry.intents) {
         if (!isOpen(intent)) continue;
+        // 暂停期内的不排到眼前：她已经连着几轮看着它没动手，硬摆出来只是噪音。
+        if (isParked(intent, now)) continue;
         const key = fingerprint(intent.text);
         if (seenText.has(key)) continue;
         seenText.add(key);
@@ -382,17 +384,20 @@ export class Scheduler {
       ...(intent.preferredAt === undefined ? {} : { preferredAt: intent.preferredAt }),
       source: intent.source,
     }));
-    const scored = config.scoreEnabled
+    const ranked = config.scoreEnabled
       ? selectCandidates(rankCandidates(candidates, { now, recent: recentNotes }), {
           threshold: config.scoreThreshold,
           max: MAX_RANKED,
-        }).map((entry) => ({
+        })
+      : [];
+    const surfacedIds = ranked.map((entry) => entry.id);
+    const scored = ranked
+      .map((entry) => ({
           text: entry.text,
           kind: entry.kind,
           score: entry.score,
           why: explain(entry, now),
-        }))
-      : [];
+        }));
 
     const outcome = await this.#driveWake({
       sessionId,
@@ -438,6 +443,22 @@ export class Scheduler {
       }
       state.lastActivityAt = finishedAt;
     });
+
+    // 冷度回写：她这一轮真动了手就把排到眼前的清零，没动就各记半格；
+    // 连着四轮开到眼前都没动，就暂停七天，不再占候选名额。
+    if (surfacedIds.length > 0) {
+      const ledgerOwner = config.wakeSession.trim() === '' ? sessionId : config.wakeSession.trim();
+      const decision = this.#deps.state.session(ledgerOwner)?.runs.find((entry) => entry.id === runId)?.decision;
+      this.#deps.state.update(ledgerOwner, (state) => {
+        for (const id of surfacedIds) {
+          const index = state.intents.findIndex((intent) => intent.id === id);
+          if (index < 0) continue;
+          const intent = state.intents[index] as Intent;
+          if (intent.state !== 'open') continue;
+          state.intents[index] = decision === 'acted' ? recordHit(intent, new Date(finishedAt)) : recordMiss(intent, new Date(finishedAt));
+        }
+      });
+    }
     this.#deps.onChange?.();
     return outcome;
   }
