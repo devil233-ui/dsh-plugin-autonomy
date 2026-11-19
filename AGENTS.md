@@ -10,7 +10,9 @@ pnpm build:client  # node scripts/build-client.mjs，产物 lib/client.js
 pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test dist/test/*.test.js
 ```
 
-改完 host 代码要重新 `build` 并重启宿主才能生效；改 client 代码要重新 `build:client`，随后刷新页面（loader 会重新执行 bundle）。
+改完 host 代码要重新 `build` **并重启宿主**才能生效；改 client 代码只需 `build:client`，**打开页面时 loader 重跑 bundle，不用重启**（2026-11-19 实测：字号控件构建完就能在线上看到，而同时构建的 `speakCooldownMinutes` 在活着的接口里查不到）。
+
+`pnpm test` 先 `tsc` 到 `dist/` 再跑 `dist/test/*.test.js`：**删掉测试文件后老的 `dist/test/*.js` 还在，会假绿**。改了测试集合先 `rm -rf dist`。
 
 ## 目录职责
 
@@ -29,7 +31,11 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 6. **冷会话按 `sessionController.resolveAgent` 恢复**，别裸调 `agents.resume({resumeSessionId})`：后者不带预设与模型，`agent.options.model` 为空，人设段的 `{{model}}` 拼不出来，整轮直接 `prompt variable "{{model}}" has no value`（2026-11-19 实测）。控制器不在的宿主再退回裸 resume。
 7. **面板要遍历全部已记录会话**，不只是当前 live 的：`StateStore.sessionIds()` 保证冷会话的历史仍然可见。`todayRuns` 是它们的合并时间线，按配置时区切「今天」，别用 `Date` 的本地日界。
 8. **唤醒落点与聊天会话分开**。`config.wakeSession` 非空时 `managedSessions()` 只返回它，掷骰、记账、台账全部落在这一个会话（面板「建一个她的会话」用 `sessionController.create({})` 现造）。原因是 aura 的群闸会在「这一轮不是主人」时把本机工具收走并黏住 live agent，唤醒落进群会话就只剩白名单工具（2026-11-19 实测 bash 直接 unknown tool）。
-9. **说话走 `aurabot` 服务，不走工具闸**。`autonomy_say` 内部 `ctx.get('aurabot').send({target, text})`，目标只能取 `config.speakTargets`（形如 `group:<群号>`，留空=主人私聊）；白名单、试运行、总开关仍由 aura 的 `canSend` 判定。这条路径不是 `tools.restrict` 管的范围，所以群会话里被收走 qq 工具时它照样能发。
+9. **说话走 `aurabot` 服务，不走工具闸**。`autonomy_say` 内部 `ctx.get('aurabot').send({target, text})`。这条路径不是 `tools.restrict` 管的范围，所以群会话里被收走 qq 工具时它照样能发；试运行、总开关仍由 aura 的 `canSend` 判定。
+10. **说话是三道闸，顺序不能换**：①主人私聊恒放行（不写 `target` 就是发主人，不需要配置）；②`config.speakTargets` 只加「除主人之外」的去处，空 = 除主人外一律不发，拒绝话术里要写明主人私聊仍可用；③插队守卫：那个聊天有人说了话她还没回 → 拒；同一聊天冷却期内（`speakCooldownMinutes`，默认 3，0=关）说过 → 拒。守卫全部从 `aurabot.events()` 的事件环重算，不另存状态；读不到事件环就退化成只查名单，不能因此把发言全堵死。
+11. **唤醒永不抛异常**。宿主是 fail-loud（未捕获异常直接 exit(1)），而 `sessionController.resolveAgent` 可能返回 `{error}`；早期 `pickAgent` 把它当 agent、读 `.session.seq` 就把整个宿主带走了（2026-11-19 一次真实唤醒）。`looksLikeAgent` 必须验 `followup` 是函数、`session.seq` 是数字；`wake()` 外层 catch 成 `{status:'error'}`，调度侧再兜一层。
+12. **台账是跨会话的**。账本归 `config.wakeSession`（落点空时归工具所在会话），`autonomy_intents` 读写要合并「本会话 + 落点会话」，`revise/complete/abandon` 必须先找到真正持有该 id 的会话再改；面板行要带 `ownerSessionId`，否则在唤醒房间点「完成」会报 `no intent <id>`。
+13. **打分是纯函数，可复算**。`src/core/score.ts` 只看 `dueAt/preferredAt/kind/source` 与传入的 `recent` 文本，权重 `SCORE_WEIGHTS` 固定；`scoreEnabled` 只决定是否把候选塞进 framing，不改变台账状态（低分的意图仍然开着）。
 
 ## 与 aurabot 的边界
 
@@ -52,6 +58,14 @@ DSH_HOME=/tmp/iso dsh --profile iso --port 8611 --no-open
 ```
 
 面板 API 无 cookie 直连即可验证：`curl -s localhost:8611/api/dsh-autonomy/state`。
+
+## 重启与部署
+
+`/root/DSH/bin/dsh-restart-safe` 是唯一手段（禁止绕 systemctl）。它现在除了会话文件 90 秒内被写、回合未收尾（900 秒）之外，还读 `/root/.dsh/autonomy/state.json` 检查**在飞判断**（`queued`/`running`/`settling`，窗口 `SAFE_AUTONOMY_WINDOW` 默认 300 秒），命中就拒绝——否则重启会把那一轮记成 `interrupted · host restarted while this judgement was in flight`。
+
+- 以「别人的会话文件刚被写过」拒绝时，等几十秒重跑即可，不要拿去问人；以「她正在回话（回合未收尾）」拒绝时，那是真在说话，等这轮结束。
+- `state.json` 由 `StateStore.flush()` 整体重写，宿主运行中手改会被内存态覆盖：改完立刻重启。
+- 脚本末尾打印的 token 常是上一次的（宿主启动约 14 秒后才写新的），要登录从 `/var/log/dsh-web.log` 末尾取。
 
 ## 交付前自检
 
