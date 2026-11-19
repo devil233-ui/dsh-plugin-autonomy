@@ -62,6 +62,17 @@ export function isRunTrigger(value: unknown): value is RunTrigger {
   return typeof value === "string" && (TRIGGERS as readonly string[]).includes(value);
 }
 
+/**
+ * 模型还能不能自己收尾。
+ *
+ * `running` 是常规路径；`settling` 也要放行——唤醒投递成功的那一刻 run 就被打到
+ * settling（等会话落定），而模型总是这之后才调 `autonomy_finish`。只认 `running`
+ * 会把每一次自报的判断都拒掉，账本只能退回观察推断。
+ */
+export function canFinish(status: RunStatus): boolean {
+  return status === "running" || status === "settling";
+}
+
 export function isTerminal(status: RunStatus): boolean {
   return (
     status === "completed" ||

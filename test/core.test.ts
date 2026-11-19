@@ -23,7 +23,7 @@ import {
   trimIntents,
   type Intent
 } from "../src/core/intent.js";
-import { createRun, failRun, isTerminal, settleRun, startRun, trimRuns } from "../src/core/run.js";
+import { canFinish, createRun, failRun, isTerminal, settleRun, startRun, trimRuns } from "../src/core/run.js";
 
 const TZ = "Asia/Shanghai";
 const NOW = new Date("2026-11-18T19:30:00+08:00");
@@ -288,6 +288,15 @@ describe("run: 判断记录", () => {
     const trimmed = trimRuns([...finished, running], 2);
     assert.equal(trimmed.length, 2);
     assert.ok(trimmed.some((run) => run.id === "c"));
+  });
+
+  it("settling 仍允许模型自己收尾", () => {
+    assert.equal(canFinish("running"), true);
+    // 唤醒投递成功那一刻就进 settling，模型的 autonomy_finish 总在这之后到
+    assert.equal(canFinish("settling"), true);
+    for (const status of ["queued", "completed", "failed", "cancelled", "interrupted", "uncertain", "busy"] as const) {
+      assert.equal(canFinish(status), false, `${status} 不该再被收尾`);
+    }
   });
 });
 

@@ -17,7 +17,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm';
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 import { createIntent, reviseIntent, settleIntent, isOpen, remindAt } from '../core/intent.js';
-import { settleRun } from '../core/run.js';
+import { canFinish, settleRun } from '../core/run.js';
 import type { AutonomyConfig } from './settings.js';
 import type { Scheduler } from './scheduler.js';
 import { MAX_SEEN_REQUESTS, type SessionState, type StateStore } from './state.js';
@@ -340,7 +340,9 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         if (run === undefined) {
           return json({ error: `no run ${runId} for this session; finish only the wake you were started by` });
         }
-        if (run.status !== 'running') return json({ error: `run ${runId} is already ${run.status}` });
+        // 收尾几乎总是落在 settling：唤醒投递成功那一刻 run 就已经不在 running 了，
+        // 这里只拒真正的终态，别把模型自己的判断挡在门外。
+        if (!canFinish(run.status)) return json({ error: `run ${runId} is already ${run.status}` });
 
         const settled = settleRun(run, decision, reason === '' ? 'no reason given' : reason, new Date(now));
         services.state.update(sessionId, (entry) => {

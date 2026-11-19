@@ -10,6 +10,8 @@
  *     the model's own claim, so a silent turn is recorded as silent.
  */
 
+import type { Agent } from '@deepseek-ai/dsh-agent';
+
 import { createFramingMessage, type WakeTrigger } from './framing.js';
 import { observeTurn, type TurnObservation } from './observer.js';
 import { asLiveAgent, sessionLogOf, type AgentsFacade, type LiveAgent } from './types.js';
@@ -35,6 +37,13 @@ export interface WakeRequest {
 
 export interface WakeDeps {
   agents: AgentsFacade;
+  /**
+   * 宿主的会话控制器（web / 桌面组合里有）。冷会话要走它这条恢复路径：
+   * 控制器恢复时会带上预设与模型，裸调 `agents.resume({resumeSessionId})` 不带给，
+   * `agent.options.model` 就是空的，人设段里的 `{{model}}` 拼不出来，整轮直接报
+   * `prompt variable "{{model}}" has no value`。
+   */
+  sessionController?: () => SessionControllerLike | undefined;
   timeZone: string;
   /** Upper bound on one autonomous turn before the plugin stops waiting. */
   maxTurnMs?: number;
@@ -47,7 +56,25 @@ export interface WakeDeps {
   logger: { warn(message: string): void; error?(message: string): void };
 }
 
+/** 只需要恢复会话这一件事，别把宿主内部类型引进插件。 */
+export interface SessionControllerLike {
+  resolveAgent(sessionId: string): Promise<unknown>;
+}
+
 const DEFAULT_MAX_TURN_MS = 15 * 60 * 1000;
+
+/** 控制器可能直接回 agent，也可能回 `{ agent }` / `{ error }`。 */
+function pickAgent(value: unknown): { agent?: LiveAgent; error?: string } {
+  if (value === undefined || value === null) return {};
+  const direct = asLiveAgent(value as unknown as Agent | undefined);
+  if (direct !== undefined) return { agent: direct };
+  const bag = value as { agent?: unknown; error?: { message?: unknown } | string };
+  const nested = asLiveAgent(bag.agent as unknown as Agent | undefined);
+  if (nested !== undefined) return { agent: nested };
+  const error = bag.error;
+  if (error === undefined) return {};
+  return { error: typeof error === 'string' ? error : String(error.message ?? 'unknown error') };
+}
 
 export class WakeDriver {
   readonly #deps: WakeDeps;
@@ -60,6 +87,19 @@ export class WakeDriver {
   async #resolve(sessionId: string): Promise<{ agent?: LiveAgent; resumed?: boolean; error?: string }> {
     const live = asLiveAgent(this.#deps.agents.get(sessionId));
     if (live !== undefined) return { agent: live };
+
+    // 优先走宿主的会话控制器：它按会话记录的预设与模型恢复，和界面/QQ 进来的
+    // 那一轮是同一套装配。裸 resume 只给了会话 id，模型就丢了。
+    const controller = this.#deps.sessionController?.();
+    if (controller !== undefined && typeof controller.resolveAgent === 'function') {
+      try {
+        const resolved = pickAgent(await controller.resolveAgent(sessionId));
+        if (resolved.agent !== undefined) return { agent: resolved.agent, resumed: true };
+        if (resolved.error !== undefined) return { error: `resume failed: ${resolved.error}` };
+      } catch (error) {
+        return { error: `resume failed: ${String(error)}` };
+      }
+    }
 
     if (typeof this.#deps.agents.resume !== 'function') {
       return { error: 'agents.resume is unavailable on this host' };

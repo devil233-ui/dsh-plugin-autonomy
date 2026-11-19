@@ -24,8 +24,16 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 1. **客户端 bundle id 必须等于包名**。`__ModuleLoader__.load({ id })` 里的 id 与 `dsh.client` 声明不一致时，loader 会认为 bundle 没注册、再执行一次，页面报 `duplicate factory registration`，卡片不出现。
 2. **React 必须走 loader 注入**。客户端代码写 `import * as ReactNS from 'react'`（esbuild external 会编译成 factory 里的 `require("react")`），不要用 `ctx.get('react')`，那是 undefined。
 3. **`exports["."]` 指向 `lib/index.js`**。`tsc -p tsconfig.build.json` 的 rootDir 是 `src`，入口在 `src/index.ts`（转发 `host/index.js`），别直接指向 `lib/host/index.js`。
-4. **结算不能覆盖模型裁决**。`autonomy_finish` 写下的 decision 是模型自己的交代，日志推断只能兜底：`if (current.status === 'completed') return;`。
-5. **面板要遍历全部已记录会话**，不只是当前 live 的：`StateStore.sessionIds()` 保证冷会话的历史仍然可见。
+4. **结算不能覆盖模型裁决**。`autonomy_finish` 写下的 decision 是模型自己的交代，日志推断只能兜底：`if (current.status === 'completed') return;`。配套两处缺一不可：`canFinish()` 必须放行 `settling`（投递成功那一刻 run 就进 settling，模型的收尾永远落在它之后，只认 `running` 会 100% 被拒）；观察器不能把 `autonomy_finish` 这次工具调用算成「做了事」。
+5. **观察器认的事件名是本机宿主的**：助手发言是 `assistant/message`（不是 `message/inserted`），`time` 是毫秒数（不是 ISO 字符串）。两处都写错过一次，后果是「她说了什么」永远读不到、`minIdleMinutes` 静默失效。
+6. **冷会话按 `sessionController.resolveAgent` 恢复**，别裸调 `agents.resume({resumeSessionId})`：后者不带预设与模型，`agent.options.model` 为空，人设段的 `{{model}}` 拼不出来，整轮直接 `prompt variable "{{model}}" has no value`（2026-11-19 实测）。控制器不在的宿主再退回裸 resume。
+7. **面板要遍历全部已记录会话**，不只是当前 live 的：`StateStore.sessionIds()` 保证冷会话的历史仍然可见。
+
+## 与 aurabot 的接口（跨插件约束）
+
+群里唤醒能拿到哪些工具，由 aura 的 `groupGates` 决定（`hub.js:141/147` 收紧、`:987` 挂载时先收起、`:2921` 每轮按说话人开合）。DSH 的 `tools.restrict` 是**取交集**、没有反向解锁的 API，所以「自主唤醒按主人回合给权限」只能在 aura 侧放开：`onSessionEvent` 见 `source.kind === 'plugin:dsh-autonomy'` 就 `applyGroupGate(key, true)`，`turn/end` 再按上一轮 QQ 说话人还回去。
+
+那是打在安装副本 `profiles/web/node_modules/dsh-aurabot-qq/src/chat/hub.js` 上的**热补丁**，`dsh plugin add/update` 升级 aura 会覆盖；原件在 `/root/Backup/aurorabot-qk-gate-20261119-161245/hub.js.改前`。升级后先查日志里 `本机工具放开（这一轮是主人）` 这行还在不在。
 
 ## 隔离实例验证
 

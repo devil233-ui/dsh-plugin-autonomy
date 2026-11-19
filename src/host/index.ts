@@ -27,7 +27,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent';
 import { loadConfig, saveConfig, type AutonomyConfig } from './settings.js';
 import { StateStore } from './state.js';
 import { Scheduler } from './scheduler.js';
-import { WakeDriver } from './wake.js';
+import { WakeDriver, type SessionControllerLike } from './wake.js';
 import { registerAutonomyTools } from './tools.js';
 import { PanelService, installPanelRoutes } from './panel.js';
 import { asLiveAgent, type AgentsFacade } from './types.js';
@@ -71,6 +71,14 @@ export function apply(ctx: Context): void {
     agents: ctx.agents as unknown as AgentsFacade,
     timeZone,
     logger,
+    // 冷会话按控制器恢复，才带得上预设与模型；取不到就退回裸 resume。
+    sessionController: () => {
+      try {
+        return ctx.get('sessionController') as unknown as SessionControllerLike | undefined;
+      } catch {
+        return undefined;
+      }
+    },
     onPhase: (sessionId, runId, phase) => {
       if (phase === 'settling') schedulerRef?.markSettling(sessionId, runId);
     },

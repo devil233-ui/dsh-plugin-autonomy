@@ -44,6 +44,14 @@ function textOf(blocks: readonly MinimalBlock[]): string {
 }
 
 /**
+ * 记账用的工具，不算「做了事」。
+ *
+ * 模型收尾时一定要调 `autonomy_finish`，它本身也是一次 tool/call；把它算进动作，
+ * 会让每一个判空的回合都被记成 acted。
+ */
+const BOOKKEEPING_TOOLS = new Set(['autonomy_finish']);
+
+/**
  * Analyze events from `startIndex` (the session seq before the wake was
  * delivered). Assistant messages and tool calls both count as action; a turn
  * that committed neither is recorded as `no_action`.
@@ -59,7 +67,9 @@ export function observeTurn(events: readonly unknown[], startIndex: number): Tur
     if (seq !== undefined && seq < startIndex) continue;
     const data = (event.data ?? {}) as Record<string, unknown>;
 
-    if (event.type === 'message/inserted' || event.type === 'message') {
+    // 本机 DSH 把助手发言记成 `assistant/message`；`message/inserted` 与 `message`
+    // 是别的宿主线/注入消息的写法，一起认。
+    if (event.type === 'message/inserted' || event.type === 'message' || event.type === 'assistant/message') {
       const message = (data.message ?? data) as Record<string, unknown>;
       if (message.role === 'assistant') {
         const text = textOf(blocksOf(message.content));
@@ -72,6 +82,8 @@ export function observeTurn(events: readonly unknown[], startIndex: number): Tur
     }
 
     if (event.type === 'tool/call' || event.type === 'tool/started' || event.type === 'tool_call') {
+      const name = typeof data.name === 'string' ? data.name : '';
+      if (BOOKKEEPING_TOOLS.has(name)) continue;
       toolCalls += 1;
     }
   }
@@ -84,13 +96,17 @@ export function observeTurn(events: readonly unknown[], startIndex: number): Tur
   };
 }
 
-/** Last activity epoch in a session log, used as "the user is around" signal. */
+/**
+ * Last activity epoch in a session log, used as "the user is around" signal.
+ *
+ * 本机宿主把 `time` 写成毫秒数，别的线可能写 ISO 字符串，两种都认；
+ * 只认字符串会让「刚有人说话就别来打扰」这条静默判断永远拿不到时间。
+ */
 export function lastActivityEpoch(events: readonly unknown[]): number | undefined {
   let latest: number | undefined;
   for (const raw of events) {
     const time = (raw as { time?: unknown }).time;
-    if (typeof time !== 'string') continue;
-    const epoch = Date.parse(time);
+    const epoch = typeof time === 'number' ? time : typeof time === 'string' ? Date.parse(time) : Number.NaN;
     if (!Number.isFinite(epoch)) continue;
     if (latest === undefined || epoch > latest) latest = epoch;
   }
