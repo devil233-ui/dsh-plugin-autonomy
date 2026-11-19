@@ -66,6 +66,7 @@ export function apply(ctx: Context): void {
   const driver = new WakeDriver({
     agents: ctx.agents as unknown as AgentsFacade,
     timeZone,
+    speakTargets: () => config.speakTargets,
     logger,
     // 冷会话按控制器恢复，才带得上预设与模型；取不到就退回裸 resume。
     sessionController: () => {
@@ -118,6 +119,16 @@ export function apply(ctx: Context): void {
         return false;
       }
     },
+    createWakeSession: async () => {
+      const controller = ctx.get('sessionController') as unknown as
+        | { create?: (input: Record<string, unknown>) => Promise<{ sessionId: string }> }
+        | undefined;
+      if (controller === undefined || typeof controller.create !== 'function') {
+        throw new Error('宿主的会话控制器不可用，无法新建会话');
+      }
+      const created = await controller.create({});
+      return String(created.sessionId);
+    },
     log: (message: string) => logger.info(message),
   });
   const disposePanel = installPanelRoutes(ctx, panel);
@@ -128,6 +139,21 @@ export function apply(ctx: Context): void {
     scheduler,
     now: () => Date.now(),
     log: (level: 'info' | 'warn' | 'error', message: string) => logger[level](message),
+    // 说话走 aura 的服务（同进程直接调用），不经它的 tools.restrict：
+    // 群会话里的工具闸只在「这一轮不是主人」时收起工具，管不到这条服务路径；
+    // 目标白名单、试运行、总开关仍然是 aura 自己的 canSend 说了算。
+    say: async (target: string, text: string): Promise<unknown> => {
+      let bridge: { send?: (input: { target?: string; text: string }) => Promise<unknown> } | undefined;
+      try {
+        bridge = ctx.get('aurabot') as unknown as typeof bridge;
+      } catch {
+        bridge = undefined;
+      }
+      if (bridge === undefined || typeof bridge.send !== 'function') {
+        return { ok: false, message: 'aurabot 服务不可用（没装 aura 插件）' };
+      }
+      return target === '' ? await bridge.send({ text }) : await bridge.send({ target, text });
+    },
   };
 
   // Tools live on the agent scope, so they are re-registered for every root

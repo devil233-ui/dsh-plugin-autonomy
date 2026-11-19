@@ -27,11 +27,15 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 4. **结算不能覆盖模型裁决**。`autonomy_finish` 写下的 decision 是模型自己的交代，日志推断只能兜底：`if (current.status === 'completed') return;`。配套两处缺一不可：`canFinish()` 必须放行 `settling`（投递成功那一刻 run 就进 settling，模型的收尾永远落在它之后，只认 `running` 会 100% 被拒）；观察器不能把 `autonomy_finish` 这次工具调用算成「做了事」。
 5. **观察器认的事件名是本机宿主的**：助手发言是 `assistant/message`（不是 `message/inserted`），`time` 是毫秒数（不是 ISO 字符串）。两处都写错过一次，后果是「她说了什么」永远读不到、`minIdleMinutes` 静默失效。
 6. **冷会话按 `sessionController.resolveAgent` 恢复**，别裸调 `agents.resume({resumeSessionId})`：后者不带预设与模型，`agent.options.model` 为空，人设段的 `{{model}}` 拼不出来，整轮直接 `prompt variable "{{model}}" has no value`（2026-11-19 实测）。控制器不在的宿主再退回裸 resume。
-7. **面板要遍历全部已记录会话**，不只是当前 live 的：`StateStore.sessionIds()` 保证冷会话的历史仍然可见。
+7. **面板要遍历全部已记录会话**，不只是当前 live 的：`StateStore.sessionIds()` 保证冷会话的历史仍然可见。`todayRuns` 是它们的合并时间线，按配置时区切「今天」，别用 `Date` 的本地日界。
+8. **唤醒落点与聊天会话分开**。`config.wakeSession` 非空时 `managedSessions()` 只返回它，掷骰、记账、台账全部落在这一个会话（面板「建一个她的会话」用 `sessionController.create({})` 现造）。原因是 aura 的群闸会在「这一轮不是主人」时把本机工具收走并黏住 live agent，唤醒落进群会话就只剩白名单工具（2026-11-19 实测 bash 直接 unknown tool）。
+9. **说话走 `aurabot` 服务，不走工具闸**。`autonomy_say` 内部 `ctx.get('aurabot').send({target, text})`，目标只能取 `config.speakTargets`（形如 `group:<群号>`，留空=主人私聊）；白名单、试运行、总开关仍由 aura 的 `canSend` 判定。这条路径不是 `tools.restrict` 管的范围，所以群会话里被收走 qq 工具时它照样能发。
 
 ## 与 aurabot 的边界
 
 群里唤醒能拿到哪些工具，由 aura 的 `groupGates` 决定（`hub.js:141/147` 收紧、`:987` 挂载时先收起、`:2921` 每轮按说话人开合）；DSH 的 `tools.restrict` 是**取交集**、没有反向解锁的 API，插件侧只能收紧，放不开别人收的闸。
+
+**说话要用它的服务，不是它的工具。** aura 的 `bridge.dshTools` 关着时 `aurabot_qq_send` 不注册；插件侧要用就用 `ctx.get('aurabot').send`（源码注释里就这么建议）。`autonomy_say` 就是这么接的。
 
 **不要改 aura 的代码。** 2026-11-19 我把它当成本需求（唤醒按主人回合给权限）的落点，往安装副本的 `hub.js` 打了热补丁，被用户当场制止并要求撤回——已按备份还原、字节一致。「唤醒给主人回合权限」这条需求因此**仍未落地**，再动之前先把方案和归属谈清楚。
 
@@ -53,4 +57,5 @@ DSH_HOME=/tmp/iso dsh --profile iso --port 8611 --no-open
 
 - `pnpm build && pnpm build:client && pnpm test` 三件套全绿。
 - 面板改动必须真实渲染并截图核对，接口返回 200 不代表卡片出现了。
-- 端到端唤醒要看会话日志：注入事件应为 `source.kind = plugin:dsh-autonomy`，且标记行以 `[dsh-autonomy wake ` 开头。
+- 端到端唤醒要看会话日志：注入事件应为 `source.kind = plugin:dsh-autonomy`，且标记行以 `[dsh-autonomy wake ` 开头；同时确认 `autonomy_finish` 落账（`tool/call` 的 arguments 里 run_id/decision/reason）与会话里真有本机工具（`bash` 之类）可用。
+- 冷会话会话文件在 `/root/.dsh/sessions/--root--/<session-id>/session.v4.jsonl.zstd`，`zstd -dc` 后逐行 `json.loads`，按 `seq` 切 turn。

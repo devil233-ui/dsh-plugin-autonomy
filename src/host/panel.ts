@@ -9,6 +9,7 @@
 
 import type { Context } from '@deepseek-ai/cordis';
 
+import { formatLocalStamp } from '../core/schedule.js';
 import { createIntent, isOpen, settleIntent, type Intent } from '../core/intent.js';
 import type { RunRecord } from '../core/run.js';
 import { normalizeConfig, saveConfig, type AutonomyConfig } from './settings.js';
@@ -64,10 +65,13 @@ export interface PanelSnapshot {
   dataDir: string;
   config: AutonomyConfig;
   sessions: SessionRow[];
+  /** Every recorded judgement since local midnight, newest first, across sessions. */
+  todayRuns: RunRecord[];
 }
 
 export type PanelAction =
   | { type: 'configure'; patch: Record<string, unknown> }
+  | { type: 'create-wake-session' }
   | { type: 'wake'; sessionId?: string }
   | { type: 'stop'; sessionId?: string }
   | { type: 'cancel-self'; sessionId?: string }
@@ -91,8 +95,18 @@ function toRow(intent: Intent): IntentRow {
   };
 }
 
-function writeJson(res: HttpResponseLike, status: number, body: unknown): void {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+/** `YYYY-MM-DD` of one instant in the configured zone; empty zone means host zone. */
+function dayKey(ms: number, timeZone: string): string {
+  const options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    ...(timeZone === '' ? {} : { timeZone }),
+  };
+  return new Intl.DateTimeFormat('en-CA', options).format(new Date(ms));
+}
+
+function writeJson(res: HttpResponseLike, status: number, body: unknown): void {  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(JSON.stringify(body));
 }
 
@@ -133,6 +147,8 @@ export interface PanelServiceDeps {
   state: StateStore;
   scheduler: Scheduler;
   isLive(sessionId: string): boolean;
+  /** Create a fresh session for her own room and return its id. */
+  createWakeSession?: () => Promise<string>;
   log(message: string): void;
 }
 
@@ -197,7 +213,17 @@ export class PanelService {
       return a.sessionId.localeCompare(b.sessionId);
     });
     const zone = typeof this.#deps.timeZone === 'function' ? this.#deps.timeZone() : this.#deps.timeZone;
-    return { now, timeZone: zone, dataDir: this.#deps.dataDir, config, sessions };
+    const today = dayKey(now, zone);
+    const todayRuns: RunRecord[] = [];
+    for (const sessionId of ids) {
+      const state = this.#deps.state.session(sessionId, now);
+      if (state === undefined) continue;
+      for (const run of state.runs) {
+        if (dayKey(Date.parse(run.startedAt), zone) === today) todayRuns.push(run);
+      }
+    }
+    todayRuns.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+    return { now, timeZone: zone, dataDir: this.#deps.dataDir, config, sessions, todayRuns };
   }
 
   async action(raw: unknown, focus?: string): Promise<{ ok: true; snapshot: PanelSnapshot } | { ok: false; error: { code: string; message: string } }> {
@@ -215,6 +241,15 @@ export class PanelService {
           const patch = body['patch'];
           if (patch === null || typeof patch !== 'object') throw new Error('patch must be an object');
           const next = normalizeConfig(patch as Record<string, unknown>, this.#deps.getConfig());
+          saveConfig(this.#deps.dataDir, next);
+          this.#deps.setConfig(next);
+          this.#deps.scheduler.rescheduleAll(now);
+          break;
+        }
+        case 'create-wake-session': {
+          if (this.#deps.createWakeSession === undefined) throw new Error('this host cannot create sessions');
+          const created = await this.#deps.createWakeSession();
+          const next = normalizeConfig({ wakeSession: created }, this.#deps.getConfig());
           saveConfig(this.#deps.dataDir, next);
           this.#deps.setConfig(next);
           this.#deps.scheduler.rescheduleAll(now);

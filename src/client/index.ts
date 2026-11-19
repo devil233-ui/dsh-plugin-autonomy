@@ -50,6 +50,8 @@ interface ConfigView {
   maxRunsPerDay: number;
   minIdleMinutes: number;
   sessions: string[];
+  wakeSession: string;
+  speakTargets: string[];
   enabled: boolean;
 }
 
@@ -66,6 +68,7 @@ interface IntentRow {
 
 interface RunRow {
   id: string;
+  sessionId: string;
   trigger: string;
   status: string;
   decision?: string;
@@ -93,6 +96,7 @@ interface Snapshot {
   dataDir: string;
   config: ConfigView;
   sessions: SessionRow[];
+  todayRuns: RunRow[];
 }
 
 const CSS = `
@@ -129,6 +133,11 @@ function injectStyle(): void {
   style.id = '@dsh-autonomy/client.css';
   style.textContent = CSS;
   document.head.appendChild(style);
+}
+
+function shortId(sessionId: string): string {
+  const match = /^session-([0-9a-f]{8})/.exec(sessionId);
+  return match === null ? sessionId : match[1] ?? sessionId;
 }
 
 function fmtTime(epoch: number): string {
@@ -240,7 +249,7 @@ export function apply(ctx: Context): void {
       const patch: Record<string, unknown> = {};
       for (const [key, raw] of Object.entries(draft)) {
         if (raw.trim() === '') continue;
-        if (key === 'sleepWindows' || key === 'sessions') {
+        if (key === 'sleepWindows' || key === 'sessions' || key === 'speakTargets') {
           patch[key] = raw.split(',').map((part) => part.trim()).filter((part) => part !== '');
         } else if (key === 'mode') {
           patch[key] = raw.trim();
@@ -286,7 +295,9 @@ export function apply(ctx: Context): void {
         field('sleepWindows', '睡眠时段（HH:mm-HH:mm 或 23:00-08:00@5-1，逗号分隔）', (config?.sleepWindows ?? []).join(',')),
         field('maxRunsPerDay', '每日上限（0 = 不限）', config?.maxRunsPerDay ?? 20, true),
         field('minIdleMinutes', '最近活动后跳过（分钟）', config?.minIdleMinutes ?? 0, true),
-        field('sessions', '目标会话（留空 = 全部根会话）', (config?.sessions ?? []).join(',')),
+        field('wakeSession', '唤醒落点（留空 = 按下面的目标会话列表）', config?.wakeSession ?? ''),
+        field('speakTargets', '许她说话的去处（group:群号 / private:QQ号，逗号分隔）', (config?.speakTargets ?? []).join(',')),
+        field('sessions', '目标会话（留空 = 全部根会话；唤醒落点非空时忽略）', (config?.sessions ?? []).join(',')),
         field('timezone', '时区（留空 = 宿主时区）', config?.timezone ?? ''),
         field('allowSelfWake', '允许她自排唤醒（true / false）', String(config?.allowSelfWake ?? true)),
         field('motivation', '自主回合开场白（留空 = 内置）', config?.motivation ?? ''),
@@ -294,6 +305,11 @@ export function apply(ctx: Context): void {
       ),
       h!('div', { className: 'dsh-autonomy-row' },
         h!('button', { className: 'dsh-autonomy-btn primary', disabled: busy, onClick: saveConfig }, '保存配置'),
+        h!('button', {
+          className: 'dsh-autonomy-btn',
+          disabled: busy,
+          onClick: () => void act({ type: 'create-wake-session' }),
+        }, '建一个她的会话（落点指过去）'),
         Object.keys(draft).length > 0
           ? h!('button', { className: 'dsh-autonomy-btn', disabled: busy, onClick: () => setDraft({}) }, '撤销修改')
           : null,
@@ -398,6 +414,23 @@ export function apply(ctx: Context): void {
                 disabled: busy,
                 onClick: () => void act({ type: 'intent-settle', id: intent.id, state: 'abandoned', version: intent.version }),
               }, '放弃'),
+            ))),
+      ),
+
+      h!('div', { className: 'dsh-autonomy-section' },
+        h!('div', { className: 'dsh-autonomy-section-head' },
+          h!('span', { className: 'dsh-autonomy-label' }, `今天的判断（所有会话 · ${snapshot.todayRuns.length} 条）`),
+          h!('span', { className: 'dsh-autonomy-meta' }, `按 ${snapshot.timeZone} 的今天`),
+        ),
+        snapshot.todayRuns.length === 0
+          ? h!('div', { className: 'dsh-autonomy-empty' }, '今天还没有判断记录。')
+          : h!('div', { className: 'dsh-autonomy-list' },
+            snapshot.todayRuns.map((row) => h!('div', { className: 'dsh-autonomy-item', key: `${row.sessionId}:${row.id}` },
+              h!('span', { className: 'dsh-autonomy-tag' }, row.trigger),
+              h!('span', { className: 'dsh-autonomy-tag' }, row.decision ?? row.status),
+              h!('span', { className: 'dsh-autonomy-item-text' }, row.reason ?? ''),
+              h!('span', { className: 'dsh-autonomy-meta' }, shortId(row.sessionId)),
+              h!('span', { className: 'dsh-autonomy-meta' }, fmtTime(Date.parse(row.startedAt))),
             ))),
       ),
 

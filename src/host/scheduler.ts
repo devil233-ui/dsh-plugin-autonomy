@@ -80,9 +80,15 @@ export class Scheduler {
     return this.#started && !this.#stopped;
   }
 
-  /** Sessions this host supervises: the configured list, or every live root agent. */
+  /**
+   * Sessions this host supervises: the wake room when one is configured, else
+   * the configured list, else every live root agent. The wake room wins
+   * because it is the one place an autonomous turn is guaranteed to keep the
+   * local toolset (chat sessions can be gated down to a guest whitelist).
+   */
   managedSessions(): string[] {
     const config = this.#deps.config();
+    if (config.wakeSession !== '') return [config.wakeSession];
     if (config.sessions.length > 0) return [...config.sessions];
     try {
       return this.#deps.agents.roots().map((agent) => String(agent.id));

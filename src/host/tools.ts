@@ -5,6 +5,7 @@
  *
  *   autonomy_schedule  read / set / cancel this session's self-scheduled wake
  *   autonomy_intents   the intent ledger: list, remember, revise, complete, abandon
+ *   autonomy_say       speak through the installed aura bot (QQ), target-gated
  *   autonomy_finish    end an autonomous turn: acted or no_action, plus a reason
  */
 
@@ -28,6 +29,11 @@ export interface ToolServices {
   scheduler: Scheduler;
   now(): number;
   log(level: 'info' | 'warn' | 'error', message: string): void;
+  /**
+   * Send one message through the aura bot bridge (`ctx.get('aurabot').send`).
+   * Absent when aura is not installed, which is a normal deployment.
+   */
+  say?(target: string, text: string): Promise<unknown>;
 }
 
 function renderValue(_args: unknown, value: unknown): ContentBlock[] {
@@ -315,6 +321,37 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         return json({ error: `unknown action ${action}` });
       },
       presentCall: (callArgs) => presentCard('Autonomy intents', str((callArgs as { action?: unknown })['action'])),
+    }),
+
+    defineTool({
+      name: 'autonomy_say',
+      description:
+        'Speak through the aura bot (QQ) from an autonomous turn. Only the destinations the operator listed in speakTargets are accepted; leaving target out reaches the owner in private. Use it when saying something is worth more than staying silent — most wakes end without it.',
+      parameters: {
+        target: { type: 'string', description: 'One of the configured destinations, e.g. group:1053858006. Omit to reach the owner in private.' },
+        text: { type: 'string', required: true, description: 'What to say. Aura splits it into bubbles on its own rules.' },
+      },
+      output: { schema: { type: 'object', additionalProperties: true }, render: renderValue },
+      async execute(args) {
+        const text = str(args['text']).trim();
+        const target = str(args['target']).trim();
+        if (text === '') return json({ error: 'text is empty' });
+        const allowed = services.config().speakTargets;
+        if (allowed.length === 0) {
+          return json({ error: 'no speakTargets configured; the operator has to name a destination in the panel first' });
+        }
+        if (target !== '' && !allowed.includes(target)) {
+          return json({ error: `target not allowed: ${target}`, allowed });
+        }
+        if (services.say === undefined) return json({ error: 'the aura bot bridge is not available in this host' });
+        try {
+          const result = await services.say(target, text);
+          return json(result);
+        } catch (error) {
+          return json({ error: error instanceof Error ? error.message : String(error) });
+        }
+      },
+      presentCall: (callArgs) => presentCard('Say it out loud', str((callArgs as { target?: unknown })['target']) || 'owner'),
     }),
 
     defineTool({

@@ -45,6 +45,8 @@ export interface WakeDeps {
    */
   sessionController?: () => SessionControllerLike | undefined;
   timeZone: string;
+  /** Where autonomy_say may send this turn; read fresh so a panel edit applies at once. */
+  speakTargets?: () => readonly string[];
   /** Upper bound on one autonomous turn before the plugin stops waiting. */
   maxTurnMs?: number;
   /**
@@ -131,6 +133,7 @@ export class WakeDriver {
       ...(request.note === undefined ? {} : { note: request.note }),
       openIntents: request.openIntents,
       timeZone: this.#deps.timeZone,
+      speakTargets: this.#deps.speakTargets?.() ?? [],
       ...(request.motivation === undefined || request.motivation.trim() === ""
         ? {}
         : { motivation: request.motivation }),

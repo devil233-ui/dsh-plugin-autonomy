@@ -49,6 +49,15 @@ export interface AutonomyConfig {
   minIdleMinutes: number;
   /** Sessions to supervise; empty means every live root agent. */
   sessions: string[];
+  /**
+   * Where a wake actually lands. Non-empty overrides `sessions`: the scheduler
+   * watches this one session only, so her autonomous turns happen in her own
+   * room instead of a chat (an aura group session drops the local tools while
+   * the last speaker was a guest, which is exactly what a wake must not hit).
+   */
+  wakeSession: string;
+  /** `autonomy_say` destinations (`group:<id>` / `private:<qq>`); empty disables speaking. */
+  speakTargets: string[];
   /** Whether the scheduler runs at all. */
   enabled: boolean;
   /** Lines of judgement history kept per session. */
@@ -76,6 +85,8 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   maxRunsPerDay: 20,
   minIdleMinutes: 0,
   sessions: [],
+  wakeSession: '',
+  speakTargets: [],
   enabled: true,
   maxRuns: 20,
   maxIntents: 50,
@@ -142,6 +153,8 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     maxRunsPerDay: Math.round(numberOr(input.maxRunsPerDay, base.maxRunsPerDay, 0, 500)),
     minIdleMinutes: numberOr(input.minIdleMinutes, base.minIdleMinutes, 0, 24 * 60),
     sessions: stringArrayOr(input.sessions, base.sessions),
+    wakeSession: textOr(input.wakeSession, base.wakeSession),
+    speakTargets: stringArrayOr(input.speakTargets, base.speakTargets),
     enabled: booleanOr(input.enabled, base.enabled),
     maxRuns: Math.round(numberOr(input.maxRuns, base.maxRuns, 1, 200)),
     maxIntents: Math.round(numberOr(input.maxIntents, base.maxIntents, 1, 500)),

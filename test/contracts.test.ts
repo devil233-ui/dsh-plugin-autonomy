@@ -8,6 +8,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import type { RunRecord } from '../src/core/run.js';
+import { renderFramingText } from '../src/host/framing.js';
+import { PanelService } from '../src/host/panel.js';
 import { Scheduler } from '../src/host/scheduler.js';
 import { normalizeConfig, type AutonomyConfig } from '../src/host/settings.js';
 import type { SessionState, StateStore } from '../src/host/state.js';
@@ -166,4 +169,74 @@ test('cancel-contract：没有自排时取消是空操作，不会凭空造出�
   assert.equal(session.selfWake, undefined);
   await scheduler.tick();
   assert.equal(session.selfWakeVersion, 3);
+});
+
+test('wake-room：配置了唤醒落点就只盯这一个会话', () => {
+  const { scheduler } = makeScheduler({ wakeSession: 'session-room' }, ['s1', 's2']);
+  assert.deepEqual(scheduler.managedSessions(), ['session-room']);
+});
+
+test('wake-room：落点为空时仍按目标会话列表', () => {
+  const { scheduler } = makeScheduler({}, ['s1', 's2']);
+  assert.deepEqual(scheduler.managedSessions(), ['s1', 's2']);
+});
+
+test('speak-contract：没有说话名单时明确说不能说话，有名单时点名工具', () => {
+  const base = {
+    runId: 'r1',
+    sessionId: 's1',
+    trigger: 'random' as const,
+    now: new Date('2026-11-19T12:00:00Z'),
+    openIntents: [],
+    timeZone: 'Asia/Shanghai',
+  };
+  const silent = renderFramingText({ ...base, speakTargets: [] });
+  assert.match(silent, /no speaking channel configured/);
+  assert.doesNotMatch(silent, /autonomy_say/);
+
+  const aloud = renderFramingText({ ...base, speakTargets: ['group:1053858006'] });
+  assert.match(aloud, /autonomy_say/);
+  assert.match(aloud, /group:1053858006/);
+});
+
+test('today-view：合并视图跨会话收集今天的判断，隔天的旧记录不进', () => {
+  const nowMs = Date.now();
+  const run = (sessionId: string, id: string, startedAt: string): RunRecord => ({
+    id,
+    sessionId,
+    trigger: 'random',
+    status: 'completed',
+    decision: 'no_action',
+    reason: 'r',
+    startedAt,
+  });
+  const state = new MemoryState();
+  state.sessions['s1'] = {
+    sessionId: 's1',
+    lastActivityAt: nowMs,
+    nextCheckAt: 0,
+    intents: [],
+    runs: [run('s1', 'old', new Date(nowMs - 3 * 86_400_000).toISOString()), run('s1', 'b', new Date(nowMs).toISOString())],
+    counterRuns: 2,
+  };
+  state.sessions['s2'] = {
+    sessionId: 's2',
+    lastActivityAt: nowMs,
+    nextCheckAt: 0,
+    intents: [],
+    runs: [run('s2', 'c', new Date(nowMs - 60_000).toISOString())],
+    counterRuns: 1,
+  };
+  const panel = new PanelService({
+    dataDir: '/tmp',
+    timeZone: 'Asia/Shanghai',
+    getConfig: () => normalizeConfig({}),
+    setConfig: () => undefined,
+    state: state as unknown as StateStore,
+    scheduler: { managedSessions: () => ['s1', 's2'] } as unknown as Scheduler,
+    isLive: () => false,
+    log: () => undefined,
+  });
+  const snapshot = panel.snapshot();
+  assert.deepEqual(snapshot.todayRuns.map((entry) => entry.id), ['b', 'c']);
 });
