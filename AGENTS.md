@@ -70,7 +70,14 @@ DSH_HOME=/tmp/iso dsh --profile iso --port 8611 --no-open
 
 ## 交付前自检
 
+- `rm -rf dist` 后再 `pnpm test`：`tsc` 不会删掉 `dist/test/` 里已删源文件留下的旧 `.test.js`，不清理会假绿（2026-11-19 删掉 quiet 模块后仍是 56/56，清完才是 49）。
 - `pnpm build && pnpm build:client && pnpm test` 三件套全绿。
 - 面板改动必须真实渲染并截图核对，接口返回 200 不代表卡片出现了。
 - 端到端唤醒要看会话日志：注入事件应为 `source.kind = plugin:dsh-autonomy`，且标记行以 `[dsh-autonomy wake ` 开头；同时确认 `autonomy_finish` 落账（`tool/call` 的 arguments 里 run_id/decision/reason）与会话里真有本机工具（`bash` 之类）可用。
 - 冷会话会话文件在 `/root/.dsh/sessions/--root--/<session-id>/session.v4.jsonl.zstd`，`zstd -dc` 后逐行 `json.loads`，按 `seq` 切 turn。
+
+## 两条容易重犯的坑
+
+**台账的读必须与唤醒提示同源。** 唤醒提示由调度器**跨全部会话**聚合未收尾意图，那么 `autonomy_intents list` 也必须扫全部会话（`wakeSession` 优先、其余按 `state.sessionIds()`），并逐条标出账本归属。2026-11-20 它只读「调用会话 + 唤醒房间」，于是她在房间里被告知「三条待办」、工具里只看见一条，把另外两条当成历史结论，连续两轮判 `no_action`。改动见 `d17c063`，契约测试 `test/ledger.test.ts`。
+
+**客户端是 flex 列布局，列表会被静默裁行。** `.da-page`/`.da-body` 是 `display:flex; flex-direction:column`，列表作为 flex 子项默认 `flex-shrink:1`，空间不够时被压到剩余高度再 `overflow:hidden` 裁掉，分页器仍显示「共 16 条 · 第 1/1 页」——看着像只取了 5 条，其实是布局。`.da-body>*{flex-shrink:0;}` 与 `.da-list{flex:none;}` 已在 `src/client/shared.ts` 里钉住，新版块别再把这两条规则删掉。
