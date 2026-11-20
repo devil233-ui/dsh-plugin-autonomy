@@ -107,3 +107,5 @@ pnpm test         # 43 个用例，覆盖抖动、概率、跨夜与跨周窗口
 ## 致谢
 
 外部节律掷骰、意图台账、判断记录与面板的设计出自[iinukami/whalelife-plugin-autonomy](https://github.com/iinukami/whalelife-plugin-autonomy)，配置项与工具命名也沿用其约定。本仓库是在DSH插件API上的独立实现，未复制其源码。
+
+「说出去」这一步没有自己造轮子：`autonomy_say` 经[devil233-ui/dsh-aurabot-qq](https://github.com/devil233-ui/dsh-aurabot-qq)暴露的 `aurabot` 服务出站，名单与插队判定在本插件里做，投递与它自己的规则仍归 aura。复盘、冷度与记忆召回同样是照着 aura 自驱（v5 五环）与 mc-recall 的思路做的：事前一刀、分由结果挣、久无回应的条目自动降温。思路参照，未复制其源码。
