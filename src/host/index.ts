@@ -25,6 +25,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 
 import { markOutbox, pendingItems, sweepExpired } from '../core/outbox.js';
+import { describeWakeRoom, wakeRoomRequest, WAKE_ROOM_TITLE } from '../core/workspace.js';
 import { interjectionDenied, parseSpeakEvents, speakDenied } from '../core/speak.js';
 import { loadConfig, saveConfig, type AutonomyConfig } from './settings.js';
 import { StateStore } from './state.js';
@@ -136,13 +137,27 @@ export function apply(ctx: Context): void {
     },
     createWakeSession: async () => {
       const controller = ctx.get('sessionController') as unknown as
-        | { create?: (input: Record<string, unknown>) => Promise<{ sessionId: string }> }
+        | {
+            create?: (input: Record<string, unknown>) => Promise<{ sessionId: string }>;
+            rename?: (input: { sessionId: string; title: string }) => Promise<unknown>;
+          }
         | undefined;
       if (controller === undefined || typeof controller.create !== 'function') {
         throw new Error('宿主的会话控制器不可用，无法新建会话');
       }
-      const created = await controller.create({});
-      return String(created.sessionId);
+      const request = wakeRoomRequest(config.wakeWorkspace);
+      const created = await controller.create({ ...request });
+      const sessionId = String(created.sessionId);
+      // create() 不会给标题：不取名的话面板里就是一条「未命名」。
+      if (typeof controller.rename === 'function') {
+        try {
+          await controller.rename({ sessionId, title: WAKE_ROOM_TITLE });
+        } catch (error) {
+          logger.warn(`命名房间失败（${sessionId}）：${String(error)}`);
+        }
+      }
+      logger.info(`新建唤醒房间 ${sessionId}，落在 ${describeWakeRoom(request)}`);
+      return sessionId;
     },
     log: (message: string) => logger.info(message),
   });

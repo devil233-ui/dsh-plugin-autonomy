@@ -34,6 +34,7 @@ export interface ConfigView {
   minIdleMinutes: number;
   sessions: string[];
   wakeSession: string;
+  wakeWorkspace: string;
   speakTargets: string[];
   speakCooldownMinutes: number;
   scoreEnabled: boolean;

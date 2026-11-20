@@ -56,6 +56,8 @@ export interface AutonomyConfig {
    * the last speaker was a guest, which is exactly what a wake must not hit).
    */
   wakeSession: string;
+  /** 建房间时用的工作区：id 或绝对路径；留空=宿主默认。 */
+  wakeWorkspace: string;
   /**
    * The only chats `autonomy_say` may point at (`group:<id>` / `private:<qq>`).
    *
@@ -116,6 +118,7 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   minIdleMinutes: 0,
   sessions: [],
   wakeSession: '',
+  wakeWorkspace: '',
   speakTargets: [],
   speakCooldownMinutes: 3,
   outboxTtlMinutes: 10,
@@ -199,6 +202,7 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     minIdleMinutes: numberOr(input.minIdleMinutes, base.minIdleMinutes, 0, 24 * 60),
     sessions: stringArrayOr(input.sessions, base.sessions),
     wakeSession: textOr(input.wakeSession, base.wakeSession),
+    wakeWorkspace: textOr(input.wakeWorkspace, base.wakeWorkspace),
     speakTargets: stringArrayOr(input.speakTargets, base.speakTargets),
     speakCooldownMinutes: Math.round(numberOr(input.speakCooldownMinutes, base.speakCooldownMinutes, 0, 120)),
     outboxTtlMinutes: Math.round(numberOr(input.outboxTtlMinutes, base.outboxTtlMinutes, 0, 240)),
