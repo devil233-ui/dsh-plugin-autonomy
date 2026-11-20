@@ -29,7 +29,10 @@ export function speakDenied(target: string, allowed: readonly string[]): string 
   if (target === '') return '';
   if (!isSpeakTarget(target)) return malformedTargetMessage(target);
   if (!allowed.includes(target)) {
-    return `target not allowed: ${target}（the owner in private is always open; whitelisted chats: ${allowed.length === 0 ? 'none' : allowed.join(', ')}）`;
+    if (target.startsWith('private:')) {
+      return `to reach the owner in private, leave target empty — do not fill in any private:<qq>, got: ${target}`;
+    }
+    return `target not allowed: ${target}（whitelisted chats: ${allowed.length === 0 ? 'none' : allowed.join(', ')}）`;
   }
   return '';
 }

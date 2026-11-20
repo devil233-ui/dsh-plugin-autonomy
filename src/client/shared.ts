@@ -35,6 +35,7 @@ export interface ConfigView {
   sessions: string[];
   wakeSession: string;
   wakeWorkspace: string;
+  wakeTitle: string;
   speakTargets: string[];
   speakCooldownMinutes: number;
   scoreEnabled: boolean;

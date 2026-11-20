@@ -10,6 +10,12 @@
  */
 export const WAKE_ROOM_TITLE = '自主意识 · 她的房间';
 
+/** 配置里没写标题时用内置那个。 */
+export function wakeRoomTitle(raw: string): string {
+  const value = raw.trim();
+  return value === '' ? WAKE_ROOM_TITLE : value;
+}
+
 const WORKSPACE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface WakeRoomRequest {

@@ -25,7 +25,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { Agent } from '@deepseek-ai/dsh-agent';
 
 import { markOutbox, pendingItems, sweepExpired } from '../core/outbox.js';
-import { describeWakeRoom, wakeRoomRequest, WAKE_ROOM_TITLE } from '../core/workspace.js';
+import { describeWakeRoom, wakeRoomRequest, wakeRoomTitle } from '../core/workspace.js';
 import { interjectionDenied, parseSpeakEvents, speakDenied } from '../core/speak.js';
 import { loadConfig, saveConfig, type AutonomyConfig } from './settings.js';
 import { StateStore } from './state.js';
@@ -151,7 +151,7 @@ export function apply(ctx: Context): void {
       // create() 不会给标题：不取名的话面板里就是一条「未命名」。
       if (typeof controller.rename === 'function') {
         try {
-          await controller.rename({ sessionId, title: WAKE_ROOM_TITLE });
+          await controller.rename({ sessionId, title: wakeRoomTitle(config.wakeTitle) });
         } catch (error) {
           logger.warn(`命名房间失败（${sessionId}）：${String(error)}`);
         }

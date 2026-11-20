@@ -52,6 +52,7 @@ export const CONFIG_GROUPS: GroupSpec[] = [
     fields: [
       { key: 'wakeSession', label: '唤醒落点（首选）', hint: '填了就只在这一条会话里醒，下面那栏完全不看', kind: 'text' },
       { key: 'wakeWorkspace', label: '房间所在工作区', hint: '工作区 id 或绝对路径（如 /root/鱼）；留空=宿主默认', kind: 'text' },
+      { key: 'wakeTitle', label: '房间标题', hint: '新建房间时用这个名字；留空=「自主意识 · 她的房间」', kind: 'text' },
       { key: 'sessions', label: '目标会话（落点为空时才用）', hint: '填了 = 只醒这几条；这栏也空 = 全部根会话（含 QQ 聊天，会打扰对话）', kind: 'list' },
     ],
   },

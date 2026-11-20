@@ -25,7 +25,8 @@ test('speak: 名单为空时群聊一律不发', () => {
 
 test('speak: 不在名单里的地址被拒，并说明主人私聊仍可用', () => {
   assert.match(speakDenied('group:100200300', [group]), /not allowed/);
-  assert.match(speakDenied('group:100200300', [group]), /owner in private is always open/);
+  assert.match(speakDenied('group:100200300', [group]), /whitelisted chats: group:1053858006/);
+  assert.match(speakDenied('private:1250226509', [group]), /leave target empty/);
 });
 
 test('speak-guard: 有人在等她回答时不许发', () => {

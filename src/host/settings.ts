@@ -58,6 +58,8 @@ export interface AutonomyConfig {
   wakeSession: string;
   /** 建房间时用的工作区：id 或绝对路径；留空=宿主默认。 */
   wakeWorkspace: string;
+  /** 房间标题；留空用内置默认。 */
+  wakeTitle: string;
   /**
    * The only chats `autonomy_say` may point at (`group:<id>` / `private:<qq>`).
    *
@@ -119,6 +121,7 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   sessions: [],
   wakeSession: '',
   wakeWorkspace: '',
+  wakeTitle: '',
   speakTargets: [],
   speakCooldownMinutes: 3,
   outboxTtlMinutes: 10,
@@ -203,6 +206,7 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     sessions: stringArrayOr(input.sessions, base.sessions),
     wakeSession: textOr(input.wakeSession, base.wakeSession),
     wakeWorkspace: textOr(input.wakeWorkspace, base.wakeWorkspace),
+    wakeTitle: textOr(input.wakeTitle, base.wakeTitle),
     speakTargets: stringArrayOr(input.speakTargets, base.speakTargets),
     speakCooldownMinutes: Math.round(numberOr(input.speakCooldownMinutes, base.speakCooldownMinutes, 0, 120)),
     outboxTtlMinutes: Math.round(numberOr(input.outboxTtlMinutes, base.outboxTtlMinutes, 0, 240)),
