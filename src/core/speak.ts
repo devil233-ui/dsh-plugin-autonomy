@@ -76,6 +76,26 @@ function agoText(ms: number): string {
   return `${Math.round(minutes / 60)}h`;
 }
 
+
+/**
+ * 空 target 指的是「主人那一条私聊」，不是所有私聊的合桶。
+ *
+ * 主人的 QQ 没暴露给插件，所以认法是她上一次真正发出去的那条私聊：
+ * 最近一条 `reply` 的 chatId 就是主人那条。还没有发出过任何私聊时退回
+ * 整个私聊集合——宁可保守，等有人说话就先别发。
+ */
+function privateScope(privates: readonly SpeakEvent[]): SpeakEvent[] {
+  let anchor: string | undefined;
+  let anchorAt = -Infinity;
+  for (const event of privates) {
+    if (event.type !== 'reply' || event.at <= anchorAt) continue;
+    anchor = event.chatId;
+    anchorAt = event.at;
+  }
+  if (anchor === undefined) return [...privates];
+  return privates.filter((event) => event.chatId === anchor);
+}
+
 /**
  * Do not cut into a live exchange.
  *
@@ -91,9 +111,10 @@ export function interjectionDenied(
   now: number,
   cooldownMs: number,
 ): string {
-  const scope = events.filter((event) =>
-    target === '' ? (event.chatId ?? '').startsWith('private:') : event.chatId === target,
-  );
+  const privates = events.filter((event) => (event.chatId ?? '').startsWith('private:'));
+  const scope = target === ''
+    ? privateScope(privates)
+    : events.filter((event) => event.chatId === target);
   if (scope.length === 0) return '';
 
   let lastIn = -Infinity;

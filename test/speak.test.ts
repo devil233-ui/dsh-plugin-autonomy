@@ -76,3 +76,23 @@ test('speak-guard: 事件环形状不对时退化成放行', () => {
   ]);
   assert.equal(interjectionDenied(group, [], NOW, 3 * MIN), '');
 });
+
+test('speak-guard: 空 target 只认她上次真正发出去的那条私聊', () => {
+  const t0 = 1_000_000;
+  const events = [
+    { at: t0, type: 'message', chatId: 'private:111' },
+    { at: t0 + 1000, type: 'reply', chatId: 'private:111' },
+    { at: t0 + 5000, type: 'message', chatId: 'private:222' },
+    { at: t0 + 9000, type: 'reply', chatId: 'private:222' },
+  ];
+  // 主人那条（222）刚说过话，冷却生效
+  assert.match(interjectionDenied('', events, t0 + 60_000, 120_000), /already spoke in this chat/);
+  // 111 有未回的消息，但空 target 只看主人那条，不因此被挡
+  assert.equal(interjectionDenied('', events, t0 + 400_000, 120_000), '');
+});
+
+test('speak-guard: 还没有私聊记录时退回整个私聊集合（保守）', () => {
+  const t0 = 1_000_000;
+  const events = [{ at: t0, type: 'message', chatId: 'private:111' }];
+  assert.match(interjectionDenied('', events, t0 + 1000, 0), /waiting for an answer/);
+});
