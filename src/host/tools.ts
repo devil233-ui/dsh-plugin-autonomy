@@ -231,20 +231,27 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         const action = str(args['action']);
         const now = services.now();
         // The ledger belongs to her, not to whichever chat happened to be open:
-        // reads span the calling session and the wake room, and writes land in
-        // the wake room when one is configured.
+        // reads span every session — the same set the wake prompt aggregates —
+        // and writes land in the wake room when one is configured.
         const ledgerOwner = services.config().wakeSession.trim();
         const home = ledgerOwner === '' ? sessionId : ledgerOwner;
         const owners = new Map<string, string>();
-        const collect = (sid: string): Intent[] => {
+        const seen = new Set<string>();
+        const intents: Intent[] = [];
+        const collect = (sid: string): void => {
           const entry = services.state.session(sid, now);
-          const list = entry?.intents ?? [];
-          for (const intent of list) if (!owners.has(intent.id)) owners.set(intent.id, sid);
-          return list;
+          for (const intent of entry?.intents ?? []) {
+            if (seen.has(intent.id)) continue;
+            seen.add(intent.id);
+            owners.set(intent.id, sid);
+            intents.push(intent);
+          }
         };
-        const own = collect(sessionId);
-        const shared = home === sessionId ? [] : collect(home);
-        const intents = [...own, ...shared];
+        collect(sessionId);
+        if (home !== sessionId) collect(home);
+        for (const sid of services.state.sessionIds()) {
+          if (sid !== sessionId && sid !== home) collect(sid);
+        }
 
         if (action === 'list') {
           const includeSettled = args['include_settled'] === true;
@@ -258,7 +265,11 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
               version: intent.version,
               remind_at: remindAt(intent) ?? null,
               due_at: intent.dueAt ?? null,
-              ledger: owners.get(intent.id) === sessionId ? 'this session' : 'wake room',
+              ledger: owners.get(intent.id) === sessionId
+                ? 'this session'
+                : owners.get(intent.id) === home
+                  ? 'wake room'
+                  : `other session ${String(owners.get(intent.id) ?? '').slice(-8)}`,
             }));
           return json({ session_id: sessionId, ledger: home, count: rows.length, intents: rows });
         }
