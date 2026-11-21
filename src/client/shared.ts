@@ -40,6 +40,7 @@ export interface ConfigView {
   speakCooldownMinutes: number;
   scoreEnabled: boolean;
   scoreThreshold: number;
+  moodEnabled: boolean;
   reviewEnabled: boolean;
   reviewBatch: number;
   reviewMinGapMinutes: number;
@@ -78,6 +79,8 @@ export interface RunRow {
   decision?: string;
   reason?: string;
   note?: string;
+  /** 这一轮读到的心情，形如 `mood 42/100 平静`；读不到就没有。 */
+  mood?: string;
   startedAt: string;
   endedAt?: string;
 }

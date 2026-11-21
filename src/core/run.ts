@@ -39,6 +39,8 @@ export interface RunRecord {
   decision?: RunDecision;
   reason?: string;
   note?: string;
+  /** 这一轮读到的心情（总值与档位），读不到就不写。 */
+  mood?: string;
   startedAt: string;
   endedAt?: string;
 }
@@ -87,6 +89,8 @@ export interface CreateRunInput {
   sessionId: string;
   trigger: RunTrigger;
   note?: string;
+  /** 这一轮读到的心情，形如 `mood 42/100 平静`；读不到就不传。 */
+  mood?: string;
 }
 
 /** 排队一条判断（还没真正执行）。 */
@@ -97,6 +101,7 @@ export function createRun(input: CreateRunInput, now: Date, idFactory: () => str
     trigger: input.trigger,
     status: "queued",
     ...(input.note?.trim() ? { note: truncate(input.note, 200) } : {}),
+    ...(input.mood?.trim() ? { mood: truncate(input.mood, 160) } : {}),
     startedAt: now.toISOString()
   };
 }

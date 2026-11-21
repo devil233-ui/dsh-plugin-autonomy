@@ -23,6 +23,7 @@ import {
 import type { RunRecord, RunTrigger } from '../core/run.js';
 import { explain, fingerprint, rankCandidates, selectCandidates, type Candidate } from '../core/score.js';
 import { recallQuery } from '../core/recall.js';
+import { moodTuning, type MoodReading } from '../core/mood.js';
 import { createRun, isTerminal, markInterrupted, markSettling, settleRun, startRun } from '../core/run.js';
 import { localDay, type StateStore } from './state.js';
 import { lastActivityEpoch } from './observer.js';
@@ -48,6 +49,8 @@ export interface SchedulerDeps {
   review?: () => Promise<void>;
   /** 醒来前查一遍记忆库；失败就当没有，不阻断唤醒。 */
   recall?: (query: string) => Promise<string>;
+  /** 她此刻的心情；只用来调制摆什么，不参与要不要醒。 */
+  mood?: () => MoodReading | undefined;
 }
 
 const SWEEP_MS = 15_000;
@@ -332,7 +335,20 @@ export class Scheduler {
     const now = this.#now();
     const config = this.#deps.config();
     const runId = newRunId();
-    const run = createRun({ sessionId, trigger, ...(note === undefined ? {} : { note }) }, new Date(now), () => runId);
+    // 心情只在这里出现一次：把这一轮摆到眼前的阈值与条数挪一挪。
+    // 掷骰、间隔、睡眠窗、每日预算都在 #consider 里，与此无关。
+    const mood = config.moodEnabled ? this.#deps.mood?.() : undefined;
+    const tuning = moodTuning(mood, { threshold: config.scoreThreshold, max: MAX_RANKED });
+    const run = createRun(
+      {
+        sessionId,
+        trigger,
+        ...(note === undefined ? {} : { note }),
+        ...(tuning.note === '' ? {} : { mood: tuning.note }),
+      },
+      new Date(now),
+      () => runId,
+    );
 
     let openIntents: Intent[] = [];
     let recentNotes: string[] = [];
@@ -389,8 +405,8 @@ export class Scheduler {
     }));
     const ranked = config.scoreEnabled
       ? selectCandidates(rankCandidates(candidates, { now, recent: recentNotes }), {
-          threshold: config.scoreThreshold,
-          max: MAX_RANKED,
+          threshold: tuning.threshold,
+          max: tuning.max,
         })
       : [];
     const surfacedIds = ranked.map((entry) => entry.id);

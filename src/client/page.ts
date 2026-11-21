@@ -217,12 +217,13 @@ export function AutonomyPage(): ReactElement {
       }, option.count === undefined ? option.label : `${option.label} ${option.count}`)),
     );
 
-  const runRow = (run: { id: string; sessionId: string; trigger: string; status: string; decision?: string; reason?: string; note?: string; startedAt: string }, opts: { showDay: boolean }): ReactElement =>
+  const runRow = (run: { id: string; sessionId: string; trigger: string; status: string; decision?: string; reason?: string; note?: string; mood?: string; startedAt: string }, opts: { showDay: boolean }): ReactElement =>
     React.createElement('div', { className: 'da-item', key: `${run.sessionId}:${run.id}` },
       React.createElement('span', { className: 'da-item-time' }, fmtTime(Date.parse(run.startedAt))),
       React.createElement('span', { className: `da-tag ${outcomeTone(run.decision ?? run.status)}` }, outcomeLabel(run.decision ?? run.status)),
       React.createElement('span', { className: 'da-tag' }, triggerLabel(run.trigger)),
       React.createElement('span', { className: 'da-item-text' }, run.reason ?? run.note ?? '没留下理由'),
+      run.mood === undefined ? null : React.createElement('span', { className: 'da-tag', title: '这一轮读到的心情' }, run.mood.replace(/^mood /, '')),
       React.createElement('span', { className: 'da-meta' }, opts.showDay ? shortId(run.sessionId) : shortId(run.sessionId)),
     );
 

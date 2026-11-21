@@ -83,6 +83,11 @@ export interface AutonomyConfig {
   scoreEnabled: boolean;
   /** Items scoring below this stay off the prompt; the intents themselves stay open. */
   scoreThreshold: number;
+  /**
+   * 读她的心情，调制这一轮把什么摆到眼前（阈值与候选上限）。
+   * 只影响摆什么，不影响什么时候醒。
+   */
+  moodEnabled: boolean;
   /** 醒来前先查一遍记忆库，把查到的几段塞进这一轮的提示词。 */
   recallEnabled: boolean;
   /** 记忆库的只读召回接口（MemoryConstellations）。 */
@@ -127,6 +132,7 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   outboxTtlMinutes: 10,
   scoreEnabled: true,
   scoreThreshold: 0.5,
+  moodEnabled: true,
   reviewEnabled: true,
   reviewBatch: 5,
   reviewMinGapMinutes: 120,
@@ -212,6 +218,7 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     outboxTtlMinutes: Math.round(numberOr(input.outboxTtlMinutes, base.outboxTtlMinutes, 0, 240)),
     scoreEnabled: booleanOr(input.scoreEnabled, base.scoreEnabled),
     scoreThreshold: numberOr(input.scoreThreshold, base.scoreThreshold, 0, 1),
+    moodEnabled: booleanOr(input.moodEnabled, base.moodEnabled),
     reviewEnabled: booleanOr(input.reviewEnabled, base.reviewEnabled),
     reviewBatch: Math.round(numberOr(input.reviewBatch, base.reviewBatch, 1, 50)),
     reviewMinGapMinutes: Math.round(numberOr(input.reviewMinGapMinutes, base.reviewMinGapMinutes, 0, 1440)),

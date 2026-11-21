@@ -63,6 +63,7 @@ export const CONFIG_GROUPS: GroupSpec[] = [
       { key: 'speakCooldownMinutes', label: '同一聊天的发言间隔（分钟）', hint: '说过一次后这段时间内不再往同一处发；0 = 不管', kind: 'number', step: '1' },
       { key: 'scoreEnabled', label: '唤醒时给意图打分', kind: 'bool' },
       { key: 'scoreThreshold', label: '打分门槛（0-1）', kind: 'number', step: '0.05' },
+      { key: 'moodEnabled', label: '按她的心情调制这一轮摆什么（不动节奏）', kind: 'bool' },
     ],
   },
   {

@@ -35,6 +35,7 @@ import { WakeDriver, type SessionControllerLike } from './wake.js';
 import { registerAutonomyTools } from './tools.js';
 import { PanelService, installPanelRoutes } from './panel.js';
 import { MemoryRecall } from './recall.js';
+import { MoodProbe } from './mood.js';
 import type { AgentsFacade } from './types.js';
 import { PLUGIN_NAME } from './framing.js';
 
@@ -104,6 +105,7 @@ export function apply(ctx: Context): void {
       await drainOutboxRef?.();
     },
     recall: async (query) => memoryRecall.recall(query),
+    mood: () => moodProbe.read(),
     review: async () => {
       await reviewRef?.();
     },
@@ -236,6 +238,12 @@ export function apply(ctx: Context): void {
   };
 
   // 召回走记忆库自己的只读接口；它跟 aura 无关，aura 那边只剩模型的系统回合。
+  // 心情走 aura 的 mood 模块（同进程直接拿对象）。拿不到就当这轮没有心情。
+  const moodProbe = new MoodProbe({
+    module: () => (ctx.get('aurabot') as unknown as { use?: (id: string) => unknown } | undefined)?.use?.('mood'),
+    log: logger,
+  });
+
   const memoryRecall = new MemoryRecall({
     url: () => config.recallUrl,
     limit: () => config.recallLimit,
