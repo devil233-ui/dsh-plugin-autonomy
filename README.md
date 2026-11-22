@@ -140,6 +140,8 @@ pnpm test         # 111 个用例，覆盖抖动、概率、跨夜与跨周窗�
 
 `src/core/` 是纯逻辑，不依赖任何 `@deepseek-ai` 包，可单独测试。
 
+要动手改它，先看 [CONTRIBUTING.md](./CONTRIBUTING.md)：目录职责、改完怎么验、`dist` 那个假绿的坑、提交约定都在那儿。
+
 ## 已知边界
 
 - 冷会话优先走宿主的 `sessionController.resolveAgent` 恢复（带预设与模型），控制器不在的宿主才退回 `agents.resume`；恢复失败时该次计入 `failed` 并留下错误文本。
