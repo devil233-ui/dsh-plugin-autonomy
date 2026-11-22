@@ -101,7 +101,9 @@ pnpm test      # core 纯逻辑 + 宿主契约测试
 
 日记模块（aurabot 的 `local-diary`）每天写完就没人管，许的愿躺在
 `modules-data/local-diary/index.json` 的 `wishes` 里。`scripts/sync-diary-wishes.mjs`
-把还没进过台账的愿望挂到意图账上，她每次自主醒来都能在 prompt 里看到。
+把它们记进插件的**愿望栏**（`<dataDir>/wishes.json`）——和意图台账并列，但**不是待办**：
+愿望可能很大、很久，也可能永远做不到，所以不给截止、不催收尾、不计入待办那条线。
+每条都带着日记日期与原文路径，她想回看就照路径去读原文。
 
 这个脚本对**没装 aura 的人没有任何影响**：它不随插件加载，也没有任何脚本或钩子去调它，整份代码只 `import { readFileSync } from 'node:fs'`，三个位置全必填。换句话说，它只是一个「你要用 aurabot 的日记模块时，手动跑或挂 cron」的独立工具；没有日记索引文件，它连启动都过不去。
 

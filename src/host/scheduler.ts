@@ -24,6 +24,7 @@ import type { RunRecord, RunTrigger } from '../core/run.js';
 import { explain, fingerprint, rankCandidates, selectCandidates, type Candidate } from '../core/score.js';
 import { recallQuery } from '../core/recall.js';
 import { moodTuning, type MoodReading } from '../core/mood.js';
+import type { Wish } from '../core/wish.js';
 import { createRun, isTerminal, markInterrupted, markSettling, settleRun, startRun } from '../core/run.js';
 import { localDay, type StateStore } from './state.js';
 import { lastActivityEpoch } from './observer.js';
@@ -51,12 +52,17 @@ export interface SchedulerDeps {
   recall?: (query: string) => Promise<string>;
   /** 她此刻的心情；只用来调制摆什么，不参与要不要醒。 */
   mood?: () => MoodReading | undefined;
+  /** 日记里的愿望：不是待办，只随本轮提示摆出来（最多 WISH_CAP 条，取最新的）。 */
+  wishes?: () => readonly Wish[];
 }
 
 const SWEEP_MS = 15_000;
 
 /** How many scored intents the framing gets; the rest stay listed but unranked. */
 const MAX_RANKED = 3;
+
+/** 每轮最多摆几条愿望：再多也只是噪声，取最新的这些。 */
+const WISH_CAP = 12;
 
 function newRunId(): string {
   return randomUUID().replace(/-/g, '').slice(0, 12);
@@ -437,6 +443,13 @@ export class Scheduler {
       })),
       ...(scored.length === 0 ? {} : { candidates: scored }),
       ...(memories === '' ? {} : { memories }),
+      ...(this.#deps.wishes === undefined || this.#deps.wishes().length === 0
+        ? {}
+        : {
+            wishes: this.#deps.wishes()
+              .slice(-WISH_CAP)
+              .map((wish) => ({ text: wish.text, day: wish.day, source: wish.source })),
+          }),
       ...(config.motivation.trim() === '' ? {} : { motivation: config.motivation }),
     });
 

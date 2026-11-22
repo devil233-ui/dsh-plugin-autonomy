@@ -17,6 +17,8 @@ import type { RunRecord } from '../core/run.js';
 import { normalizeConfig, saveConfig, type AutonomyConfig } from './settings.js';
 import type { Scheduler } from './scheduler.js';
 import type { StateStore } from './state.js';
+import type { Wish } from '../core/wish.js';
+import type { WishStore } from './wishes.js';
 
 interface WebServerLike {
   register(route: { kind: 'exact' | 'prefix'; path: string; handler: (req: HttpRequestLike, res: HttpResponseLike) => void }): () => void;
@@ -77,6 +79,8 @@ export interface PanelSnapshot {
   todayRuns: RunRecord[];
   /** 排队等她说话的消息（新的在前，含刚发出/作废的几条，便于回看）。 */
   outbox: OutboxItem[];
+  /** 她日记里许下的愿望：与意图台账并列，但不是待办。 */
+  wishes: Wish[];
 }
 
 /** Filters the standalone page sends; every field is optional. */
@@ -107,7 +111,9 @@ export type PanelAction =
   | { type: 'stop'; sessionId?: string }
   | { type: 'cancel-self'; sessionId?: string }
   | { type: 'intent-create'; sessionId?: string; text: string; kind?: string; dueAt?: string; preferredAt?: string }
-  | { type: 'intent-settle'; sessionId?: string; id: string; state: 'done' | 'abandoned'; version: number; reason?: string };
+  | { type: 'intent-settle'; sessionId?: string; id: string; state: 'done' | 'abandoned'; version: number; reason?: string }
+  | { type: 'wish-create'; text: string; day?: string; source?: string }
+  | { type: 'wish-drop'; id: string };
 
 const BODY_MAX_BYTES = 64 * 1024;
 const HEARTBEAT_MS = 25_000;
@@ -183,6 +189,8 @@ export interface PanelServiceDeps {
   isLive(sessionId: string): boolean;
   /** Create a fresh session for her own room and return its id. */
   createWakeSession?: () => Promise<string>;
+  /** 愿望（日记里许下的，不是待办）。缺省时面板不显示这一栏。 */
+  wishes?: WishStore;
   log(message: string): void;
 }
 
@@ -285,7 +293,16 @@ export class PanelService {
     todayRuns.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
     const room = config.wakeSession.trim();
     const outbox = room === '' ? [] : [...(this.#deps.state.session(room)?.outbox ?? [])].reverse().slice(0, 8);
-    return { now, timeZone: zone, dataDir: this.#deps.dataDir, config, sessions, todayRuns, outbox };
+    return {
+      now,
+      timeZone: zone,
+      dataDir: this.#deps.dataDir,
+      config,
+      sessions,
+      todayRuns,
+      outbox,
+      wishes: this.#deps.wishes === undefined ? [] : [...this.#deps.wishes.list()],
+    };
   }
 
   /**
@@ -418,6 +435,23 @@ export class PanelService {
           this.#deps.state.update(owner, (entry) => {
             entry.intents = entry.intents.map((row) => (row.id === id ? settled.value : row));
           }, now);
+          break;
+        }
+        case 'wish-create': {
+          if (this.#deps.wishes === undefined) throw new Error('wishes unavailable');
+          const created = this.#deps.wishes.add({
+            text: typeof body['text'] === 'string' ? body['text'] : '',
+            day: typeof body['day'] === 'string' ? body['day'] : '',
+            source: typeof body['source'] === 'string' ? body['source'] : '',
+          });
+          if (!created.ok) throw new Error(created.reason === 'duplicate' ? '这条愿望已经记过了' : '愿望不能为空');
+          break;
+        }
+        case 'wish-drop': {
+          const id = String(body['id'] ?? '');
+          if (id === '') throw new Error('id required');
+          if (this.#deps.wishes === undefined) throw new Error('wishes unavailable');
+          if (!this.#deps.wishes.drop(id)) throw new Error(`no wish ${id}`);
           break;
         }
         default:

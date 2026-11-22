@@ -20,7 +20,7 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 - `src/host/`：宿主侧接线。`index.ts` 是入口（`name` / `inject` / `apply`），`scheduler.ts` 管节律，`wake.ts` 管唤醒与等待，`panel.ts` 管 HTTP 路由。
 - `src/client/`：设置页卡片，经 `settings.section` 插槽注册；不参与 host 构建。
 - `scripts/build-client.mjs`：客户端打包，负责外套 `window.__ModuleLoader__.load` 包装。
-- `scripts/sync-diary-wishes.mjs`：把日记（aurabot `local-diary`）里的愿望同步进意图台账；走面板 `intent-create` 接口，不直接改 `state.json`。`--url` / `--session` / `--diary` 三项必填（无默认路径，跑在谁家机器上都一样），定时在 crontab，日志 `/var/log/diary-wishes.log`。
+- `scripts/sync-diary-wishes.mjs`：把日记（aurabot `local-diary`）里的愿望同步进**愿望栏**（`wishes.json`，与台账并列、不是待办，带 `day` 与原文路径）；走面板 `intent-create` 接口，不直接改 `state.json`。`--url` / `--session` / `--diary` 三项必填（无默认路径，跑在谁家机器上都一样），定时在 crontab，日志 `/var/log/diary-wishes.log`。
 
 ## 硬约束（踩过）
 - `GET /api/dsh-autonomy/state` 的 `sessions` 是**数组**，`openIntents`/`settledIntents` 在每一行里；读顶层同名键恒为空（2026-11-23 同步脚本据此去重失效，同一批愿望被导入两次，后来按 abandoned 收尾）。

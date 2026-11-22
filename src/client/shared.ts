@@ -116,6 +116,18 @@ export interface Snapshot {
   sessions: SessionRow[];
   todayRuns: RunRow[];
   outbox: OutboxRow[];
+  /** 日记里许下的愿望：与台账并列，但不是待办。 */
+  wishes: WishRow[];
+}
+
+export interface WishRow {
+  id: string;
+  text: string;
+  /** 日记日期 YYYY-MM-DD */
+  day: string;
+  /** 日记原文路径，供她/你回看 */
+  source: string;
+  addedAt: string;
 }
 
 export interface RunsPage {

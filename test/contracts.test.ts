@@ -383,3 +383,19 @@ test('wake-memory: 召回内容进提示词，带「可能过时」的告诫', (
   assert.match(text, /From your memory library/);
   assert.match(text, /she said she would hand in a version table|她说周三要交一份版本表/);
 });
+
+test('wish-contract：愿望单独成段、带原文路径，不混进意图', () => {
+  const text = renderFramingText({
+    runId: 'r9',
+    sessionId: 's1',
+    trigger: 'random' as const,
+    now: new Date('2026-11-22T15:00:00Z'),
+    openIntents: [{ text: '跟进上游 issue', kind: 'thought' }],
+    timeZone: 'Asia/Shanghai',
+    wishes: [{ text: '房子里养只猫', day: '2026-11-22', source: '/srv/diary/2026-11-22.md' }],
+  });
+  assert.match(text, /Wishes you wrote down in your diary/);
+  assert.match(text, /房子里养只猫 — \/srv\/diary\/2026-11-22\.md \(2026-11-22\)/);
+  const intentsPart = text.split('Wishes you wrote down')[0] ?? '';
+  assert.equal(intentsPart.includes('房子里养只猫'), false);
+});

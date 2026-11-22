@@ -37,6 +37,8 @@ export interface FramingInput {
   candidates?: readonly { text: string; kind: string; score: number; why: string }[];
   /** 记忆库按这一轮的素材捞回来的旧事；空串等于这轮没有。 */
   memories?: string;
+  /** 她日记里的愿望：不是待办，只摆出来，附原文路径供回看。 */
+  wishes?: readonly { text: string; day: string; source: string }[];
 }
 
 /**
@@ -79,6 +81,18 @@ export function renderFramingText(input: FramingInput): string {
     // 上游 whalelife 的 intent-visibility 契约：未完成意图必须全部可见，
     // 所以这里不再截断，只受台账上限（MAX_INTENTS=50）约束。
     for (const intent of input.openIntents) lines.push(intentLine(intent, input.timeZone));
+  }
+  const wishes = input.wishes ?? [];
+  if (wishes.length > 0) {
+    lines.push(
+      'Wishes you wrote down in your diary. These are not todos — some may take a long time, some may never happen, and nothing here is expected of you. The bracketed path is the diary entry they came from, if you want the original:',
+    );
+    for (const wish of wishes) {
+      const day = wish.day.trim();
+      const source = wish.source.trim();
+      const where = source === '' ? '' : ` — ${source}${day === '' ? '' : ` (${day})`}`;
+      lines.push(`- ${wish.text}${where}`);
+    }
   }
   const memories = input.memories?.trim() ?? '';
   if (memories !== '') {

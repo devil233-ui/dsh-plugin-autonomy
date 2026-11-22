@@ -31,7 +31,7 @@ import {
   type Snapshot,
 } from './shared.js';
 
-type Tab = 'overview' | 'runs' | 'ledger' | 'schedule' | 'config';
+type Tab = 'overview' | 'runs' | 'ledger' | 'wishes' | 'schedule' | 'config';
 
 /** 面板自身的字号档位。用 zoom 整体缩放，省得逐个元素改 font-size。 */
 const SCALE_KEY = 'dsh-autonomy:textScale';
@@ -55,6 +55,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: '概览' },
   { id: 'runs', label: '判断记录' },
   { id: 'ledger', label: '意图台账' },
+  { id: 'wishes', label: '愿望' },
   { id: 'schedule', label: '排程' },
   { id: 'config', label: '配置' },
 ];
@@ -204,6 +205,7 @@ export function AutonomyPage(): ReactElement {
   const quiet = today.filter((run) => run.decision === 'no_action').length;
   const openLedger = ledgerRows(sessions, 'open');
   const settledLedger = ledgerRows(sessions, 'settled');
+  const wishes = snapshot?.wishes ?? [];
   const supervised = sessions.filter((row) => row.supervised);
   const nextCheck = supervised.length === 0 ? 0 : Math.min(...supervised.map((row) => row.nextCheckAt).filter((at) => at > 0));
   const now = snapshot?.now ?? Date.now();
@@ -446,6 +448,41 @@ export function AutonomyPage(): ReactElement {
       ),
     );
 
+  const wishesTab = (): ReactElement =>
+    React.createElement('div', { className: 'da-body' },
+      React.createElement('div', { className: 'da-sub' },
+        '日记里许下的愿，不是待办：可能很久，也可能永远做不到。醒来时它们单独摆在提示词里，附原文路径，她想回看就能去读。'),
+      React.createElement('div', { className: 'da-row', style: { gap: '8px', flexWrap: 'wrap' } },
+        React.createElement('input', { className: 'da-input', style: { flex: '1 1 260px' }, placeholder: '她又许了个愿…', id: 'da-new-wish' }),
+        React.createElement('input', { className: 'da-input', style: { width: '150px' }, placeholder: '日记日期 2026-11-22', id: 'da-new-wish-day' }),
+        React.createElement('input', { className: 'da-input', style: { flex: '1 1 220px' }, placeholder: '原文路径（可选）', id: 'da-new-wish-src' }),
+        React.createElement('button', {
+          className: 'da-btn',
+          disabled: busy,
+          onClick: () => {
+            const read = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value.trim() ?? '';
+            const text = read('da-new-wish');
+            if (text === '') return;
+            void act({ type: 'wish-create', text, day: read('da-new-wish-day'), source: read('da-new-wish-src') }).then(() => {
+              for (const id of ['da-new-wish', 'da-new-wish-day', 'da-new-wish-src']) {
+                const node = document.getElementById(id) as HTMLInputElement | null;
+                if (node !== null) node.value = '';
+              }
+            });
+          },
+        }, '记下'),
+      ),
+      wishes.length === 0
+        ? React.createElement('div', { className: 'da-empty' }, '还没有记下任何愿望。')
+        : React.createElement('div', { className: 'da-list' }, ...wishes.map((wish) => React.createElement('div', { className: 'da-item', key: wish.id },
+            React.createElement('span', { className: 'da-tag' }, wish.day === '' ? '愿望' : wish.day),
+            React.createElement('span', { className: 'da-item-text' }, wish.text,
+              wish.source === '' ? null : React.createElement('span', { className: 'da-hint' }, ` · 原文 ${wish.source}`)),
+            React.createElement('span', { className: 'da-spacer' }),
+            React.createElement('button', { className: 'da-btn small', disabled: busy, onClick: () => void act({ type: 'wish-drop', id: wish.id }) }, '划掉'),
+          ))),
+    );
+
   const scheduleTab = (): ReactElement =>
     React.createElement('div', { className: 'da-body' },
       React.createElement('div', { className: 'da-section-head' },
@@ -509,7 +546,18 @@ export function AutonomyPage(): ReactElement {
       ),
     );
 
-  const body = tab === 'overview' ? overview() : tab === 'runs' ? runsTab() : tab === 'ledger' ? ledgerTab() : tab === 'schedule' ? scheduleTab() : configTab();
+  const body =
+    tab === 'overview'
+      ? overview()
+      : tab === 'runs'
+        ? runsTab()
+        : tab === 'ledger'
+          ? ledgerTab()
+          : tab === 'wishes'
+            ? wishesTab()
+            : tab === 'schedule'
+              ? scheduleTab()
+              : configTab();
 
   return React.createElement('div', { className: 'da-surface da-page', style: { zoom: scale } },
     header(),

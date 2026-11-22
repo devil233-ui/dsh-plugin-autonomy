@@ -35,6 +35,7 @@ export interface WakeRequest {
   motivation?: string;
   /** 记忆库召回的那几段，原样交给 framing 渲染。 */
   memories?: string;
+  wishes?: readonly { text: string; day: string; source: string }[];
 }
 
 export interface WakeDeps {
@@ -175,6 +176,7 @@ export class WakeDriver {
       openIntents: request.openIntents,
       ...(request.candidates === undefined ? {} : { candidates: request.candidates }),
       ...(request.memories === undefined || request.memories.trim() === "" ? {} : { memories: request.memories }),
+      ...(request.wishes === undefined || request.wishes.length === 0 ? {} : { wishes: request.wishes }),
       timeZone: this.#deps.timeZone,
       speakTargets: this.#deps.speakTargets?.() ?? [],
       ...(request.motivation === undefined || request.motivation.trim() === ""

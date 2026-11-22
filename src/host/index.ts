@@ -36,6 +36,7 @@ import { registerAutonomyTools } from './tools.js';
 import { PanelService, installPanelRoutes } from './panel.js';
 import { MemoryRecall } from './recall.js';
 import { MoodProbe } from './mood.js';
+import { WishStore } from './wishes.js';
 import type { AgentsFacade } from './types.js';
 import { PLUGIN_NAME } from './framing.js';
 
@@ -90,6 +91,12 @@ export function apply(ctx: Context): void {
   // 排队消息的投递口：调度器每 15 秒扫一遍，服务对象在同一次 apply 里稍后才
   // 构造好，所以这里先留一个可替换的引用。
   let drainOutboxRef: (() => Promise<void>) | undefined;
+  // 日记里许下的愿望：与意图台账并列，单独一个文件，不属于任何会话。
+  const wishStore = new WishStore({
+    file: join(dataDir, 'wishes.json'),
+    now: () => Date.now(),
+    log: logger,
+  });
   let reviewRef: (() => Promise<void>) | undefined;
   const scheduler = new Scheduler({
     config: () => config,
@@ -106,6 +113,7 @@ export function apply(ctx: Context): void {
     },
     recall: async (query) => memoryRecall.recall(query),
     mood: () => moodProbe.read(),
+    wishes: () => wishStore.list(),
     review: async () => {
       await reviewRef?.();
     },
@@ -130,6 +138,7 @@ export function apply(ctx: Context): void {
     setConfig: applyConfig,
     state,
     scheduler,
+    wishes: wishStore,
     isLive: (sessionId: string) => {
       try {
         return ctx.agents.get(sessionId as never) !== undefined;
