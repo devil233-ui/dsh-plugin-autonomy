@@ -60,10 +60,11 @@ pnpm test      # core 纯逻辑 + 宿主契约测试
 
 ## 工具
 
-模型在会话里可以调用三个工具：
+模型在会话里可以调用四个工具：
 
 - `autonomy_schedule`：`get` 看待机状态，`set` 指定 `at`（`YYYY-MM-DDTHH:MM`）或 `in_minutes` 排一次自排唤醒，`cancel` 撤销。`set`/`cancel` 都支持 `version`（陈旧版本拒覆盖）与 `requestId`（同一 id 重复提交不重排）。`allowSelfWake=false` 时 `set`/`cancel` 一律拒绝。
 - `autonomy_intents`：`list` 看未完成意图，`remember` 记一条（`kind=agreement` 必须给 `due_at`），`revise` 改，`complete` / `abandon` 收尾（都要带 `version` 防覆盖）。
+- `autonomy_say`：`{ target, text }` 把一句话发出去。`target` 留空 = 发主人私聊，`group:<群号>` / `private:<QQ号>` 自己挑；能不能发由 aura 的出站规则裁决，插件这边只管名单、插队守卫与冷却。
 - `autonomy_finish`：结束当前自主轮，`decision` 取 `acted` 或 `no_action`，`reason` 一句话。只对进行中的 run 有效；不调用也能收尾，此时按事件日志推断。
 
 ## 面板
@@ -76,6 +77,22 @@ pnpm test      # core 纯逻辑 + 宿主契约测试
 - 最近的判断：trigger / status / decision 徽章 + 理由 + 时间。
 
 面板走 `/api/dsh-autonomy/{state,action,events}`，前端通过 SSE 自动刷新。
+
+## 日记愿望接台账
+
+日记模块（aurabot 的 `local-diary`）每天写完就没人管，许的愿躺在
+`modules-data/local-diary/index.json` 的 `wishes` 里。`scripts/sync-diary-wishes.mjs`
+把还没进过台账的愿望挂到意图账上，她每次自主醒来都能在 prompt 里看到。
+
+```bash
+node scripts/sync-diary-wishes.mjs --dry-run   # 只看会写哪几条
+node scripts/sync-diary-wishes.mjs --days 7    # 只扫最近 7 天（默认全扫）
+```
+
+- 去重：归一化（全角转半角、去空白与标点）后一方包含另一方即算同一件事，开着的和已收尾的台账都参与比对。
+- 写入走面板接口 `POST /api/dsh-autonomy/action?session=<wakeSession>`，body `{type:'intent-create', text, kind:'thought'}`——不直接改 `state.json`，免得被宿主内存态覆盖。
+- 定时一行（`crontab -l`）：`45 23 * * * /usr/bin/node /root/DSH/repos/dsh-plugin-autonomy/scripts/sync-diary-wishes.mjs >> /var/log/diary-wishes.log 2>&1`。cron 里 node 必须写绝对路径（PATH 里的 node 走 nvm）。
+- 环境变量：`AUTONOMY_URL`（默认 `http://10.8.0.10:3301`）、`AUTONOMY_SESSION_ID`（默认读 `~/.dsh/autonomy/config.json` 的 `wakeSession`）、`DIARY_INDEX`。
 
 ## 数据
 
@@ -93,7 +110,7 @@ pnpm test      # core 纯逻辑 + 宿主契约测试
 pnpm install
 pnpm build        # host 侧 tsc → lib/
 pnpm build:client # 客户端 esbuild → lib/client.js
-pnpm test         # 43 个用例，覆盖抖动、概率、跨夜与跨周窗口、意图状态机、run 生命周期、宿主契约
+pnpm test         # 111 个用例，覆盖抖动、概率、跨夜与跨周窗口、意图状态机、run 生命周期、宿主契约
 ```
 
 `src/core/` 是纯逻辑，不依赖任何 `@deepseek-ai` 包，可单独测试。

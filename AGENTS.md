@@ -20,8 +20,10 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 - `src/host/`：宿主侧接线。`index.ts` 是入口（`name` / `inject` / `apply`），`scheduler.ts` 管节律，`wake.ts` 管唤醒与等待，`panel.ts` 管 HTTP 路由。
 - `src/client/`：设置页卡片，经 `settings.section` 插槽注册；不参与 host 构建。
 - `scripts/build-client.mjs`：客户端打包，负责外套 `window.__ModuleLoader__.load` 包装。
+- `scripts/sync-diary-wishes.mjs`：把日记（aurabot `local-diary`）里的愿望同步进意图台账；走面板 `intent-create` 接口，不直接改 `state.json`。定时任务在 crontab，日志 `/var/log/diary-wishes.log`。
 
 ## 硬约束（踩过）
+- `GET /api/dsh-autonomy/state` 的 `sessions` 是**数组**，`openIntents`/`settledIntents` 在每一行里；读顶层同名键恒为空（2026-11-23 同步脚本据此去重失效，同一批愿望被导入两次，后来按 abandoned 收尾）。
 
 1. **客户端 bundle id 必须等于包名**。`__ModuleLoader__.load({ id })` 里的 id 与 `dsh.client` 声明不一致时，loader 会认为 bundle 没注册、再执行一次，页面报 `duplicate factory registration`，卡片不出现。
 2. **React 必须走 loader 注入**。客户端代码写 `import * as ReactNS from 'react'`（esbuild external 会编译成 factory 里的 `require("react")`），不要用 `ctx.get('react')`，那是 undefined。
