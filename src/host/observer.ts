@@ -67,7 +67,7 @@ export function observeTurn(events: readonly unknown[], startIndex: number): Tur
     if (seq !== undefined && seq < startIndex) continue;
     const data = (event.data ?? {}) as Record<string, unknown>;
 
-    // 本机 DSH 把助手发言记成 `assistant/message`；`message/inserted` 与 `message`
+    // DSH 宿主把助手发言记成 `assistant/message`；`message/inserted` 与 `message`
     // 是别的宿主线/注入消息的写法，一起认。
     if (event.type === 'message/inserted' || event.type === 'message' || event.type === 'assistant/message') {
       const message = (data.message ?? data) as Record<string, unknown>;
@@ -99,7 +99,7 @@ export function observeTurn(events: readonly unknown[], startIndex: number): Tur
 /**
  * Last activity epoch in a session log, used as "the user is around" signal.
  *
- * 本机宿主把 `time` 写成毫秒数，别的线可能写 ISO 字符串，两种都认；
+ * DSH 宿主把 `time` 写成毫秒数，别的线可能写 ISO 字符串，两种都认；
  * 只认字符串会让「刚有人说话就别来打扰」这条静默判断永远拿不到时间。
  */
 export function lastActivityEpoch(events: readonly unknown[]): number | undefined {

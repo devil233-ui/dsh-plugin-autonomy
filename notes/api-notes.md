@@ -12,7 +12,7 @@ export function apply(ctx: Context) { ... }
 ```
 
 来源：`src/index.ts:26-28`（proactive 用 `inject = ["agents","tools","sessionPersistence","workspaceRegistry"]`）。
-`webServer` 在本机 web profile 组合中存在；headless 时应降级为无面板、只留工具。
+`webServer` 在 web profile 组合中存在；headless 时应降级为无面板、只留工具。
 
 ## 2. Agent 获取与唤醒
 

@@ -92,7 +92,7 @@ async function getLedger() {
   if (!res.ok) throw new Error(`GET state 失败：HTTP ${res.status}`)
   const data = await res.json()
   // 快照里的 sessions 是数组，台账按 sessionId 取那一行；早期版本误读成顶层 openIntents，
-  // 结果去重形同虚设、同一条愿望被导入两次（2026-11-23 实修过）。
+  // 结果去重形同虚设、同一条愿望被导入两次。
   const rows = Array.isArray(data.sessions) ? data.sessions : []
   const row = rows.find((item) => String(item?.sessionId || '') === sessionId) || {}
   const open = Array.isArray(row.openIntents) ? row.openIntents : []

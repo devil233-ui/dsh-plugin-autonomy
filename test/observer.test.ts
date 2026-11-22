@@ -2,7 +2,7 @@
  * 观察器的取数口径。
  *
  * 它决定「没有自报判断的回合记成什么」，所以两个细节都要钉死：
- * 本机宿主的助手发言事件名是 `assistant/message`；收尾工具 `autonomy_finish`
+ * DSH 宿主的助手发言事件名是 `assistant/message`；收尾工具 `autonomy_finish`
  * 不能算成「做了事」——否则每一次判空的回合都会被写成 acted。
  */
 import assert from "node:assert/strict";
