@@ -42,11 +42,13 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 
 ## 与 aurabot 的边界
 
-群里唤醒能拿到哪些工具，由 aura 的 `groupGates` 决定（`hub.js:141/147` 收紧、`:987` 挂载时先收起、`:2921` 每轮按说话人开合）；DSH 的 `tools.restrict` 是**取交集**、没有反向解锁的 API，插件侧只能收紧，放不开别人收的闸。
+群会话能拿到哪些工具，由 aura 的 `groupGates` 决定：`applyGroupGate` 定义在 `chat/hub.js:225`，挂载群会话时先收起（`:1244`），之后**只在每条 QQ 消息进来时**按发送者重算一次（`:3348` 调 `turnSendersAllTools`，判据是主人 / 无发送者且 `group.timerAsOwner` / 每个发送者都在 `capabilityAllow.tools` 里）。DSH 的 `tools.restrict` 是**取交集**、没有反向解锁的 API，插件侧只能收紧，放不开别人收的闸。
 
 **说话要用它的服务，不是它的工具。** aura 的 `bridge.dshTools` 关着时 `aurabot_qq_send` 不注册；插件侧要用就用 `ctx.get('aurabot').send`（源码注释里就这么建议）。`autonomy_say` 就是这么接的。
 
-**不要改 aura 的代码。** 2026-11-19 我把它当成本需求（唤醒按主人回合给权限）的落点，往安装副本的 `hub.js` 打了热补丁，被用户当场制止并要求撤回——已按备份还原、字节一致。「唤醒给主人回合权限」这条需求因此**仍未落地**，再动之前先把方案和归属谈清楚。
+**不要改 aura 的代码。** 2026-11-19 我把它当成本需求（唤醒按主人回合给权限）的落点，往安装副本的 `hub.js` 打了热补丁，被用户当场制止并要求撤回——已按备份还原、字节一致。
+
+那条需求后来的结论不是「落地了」，也不是「还欠着」：**它被落点分离绕开了**。唤醒现在只落在她自己的会话（`wakeSession`），不进群会话，`groupGates` 根本不参与。群里的闸对插件注入的回合仍然不重算——注入那条路不经过 `:3348`，只会继承上一轮 QQ 消息留下的锁（2026-11-19 15:28 那次 `bash` 报 unknown 就是这个机制）。aura 侧后来补的 `group.timerAsOwner`（默认 false，本机已开）只覆盖「无发送者的轮次」，`capabilityAllow.tools` 只覆盖「被授权的成员」，两者都不解决注入轮。要回群聊里唤醒，先解决这一条。
 
 ## 隔离实例验证
 
