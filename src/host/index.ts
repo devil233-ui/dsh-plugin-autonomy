@@ -1,7 +1,7 @@
 /**
  * dsh-autonomy — an autonomy loop for DSH agent sessions.
  *
- * Semantics carried over from the AstrBot `astrbot_plugin_autonomy` plugin and
+ * Semantics carried over from whalelife-plugin-autonomy and
  * its upstream `whalelife` original: the *host* decides when to wake a
  * session (a jittered interval, then a probability gate, optionally scaled by
  * how long the session has been quiet), and the model decides what to do with
@@ -237,7 +237,7 @@ export function apply(ctx: Context): void {
     }
   };
 
-  // 召回走记忆库自己的只读接口；它跟 aura 无关，aura 那边只剩模型的系统回合。
+  // 召回走记忆库自己的只读接口；它跟 aura 无关，aura 那边只剩它自己跑的系统回合。
   // 心情走 aura 的 mood 模块（同进程直接拿对象）。拿不到就当这轮没有心情。
   const moodProbe = new MoodProbe({
     module: () => (ctx.get('aurabot') as unknown as { use?: (id: string) => unknown } | undefined)?.use?.('mood'),
@@ -252,7 +252,7 @@ export function apply(ctx: Context): void {
     log: logger,
   });
 
-  // 复盘的模型通道走 aura 的系统回合（不占任何聊天），记忆走它的 memory 模块；
+  // 复盘那一轮走 aura 的系统回合（不占任何聊天），记忆走它的 memory 模块；
   // 两样都拿不到就退回确定性模板，复盘照做，只是不蒸馏。
   const reviewer = new Reviewer({
     config: () => config,

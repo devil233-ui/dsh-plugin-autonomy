@@ -447,7 +447,7 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
           return json({ error: `no run ${runId} for this session; finish only the wake you were started by` });
         }
         // 收尾几乎总是落在 settling：唤醒投递成功那一刻 run 就已经不在 running 了，
-        // 这里只拒真正的终态，别把模型自己的判断挡在门外。
+        // 这里只拒真正的终态，别把她自己的判断挡在门外。
         if (!canFinish(run.status)) return json({ error: `run ${runId} is already ${run.status}` });
 
         const settled = settleRun(run, decision, reason === '' ? 'no reason given' : reason, new Date(now));

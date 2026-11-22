@@ -8,27 +8,46 @@
  * 她每次自主醒来时都会在 prompt 里看到自己的意图，可以自己挑一条去做、
  * 或判断完就安静结束。
  *
- * 用法：
- *   node scripts/sync-diary-wishes.mjs              # 真写
- *   node scripts/sync-diary-wishes.mjs --dry-run    # 只看会写哪几条
- *   node scripts/sync-diary-wishes.mjs --days 7     # 只扫最近 7 天（默认全扫）
+ * 三个位置都必须显式给，脚本不带任何默认路径（它跑在谁家的机器上都一样）：
  *
- * 环境变量：
- *   AUTONOMY_URL          默认 http://10.8.0.10:3301
- *   AUTONOMY_SESSION_ID   默认读 /root/.dsh/autonomy/config.json 的 wakeSession
- *   DIARY_INDEX           默认 /root/.dsh/plugins-data/aurabot/modules-data/local-diary/index.json
+ *   node scripts/sync-diary-wishes.mjs \
+ *     --url http://127.0.0.1:3301 \
+ *     --session session-xxxxxxxx-.... \
+ *     --diary /path/to/aurabot/modules-data/local-diary/index.json \
+ *     [--dry-run] [--days N]
+ *
+ * 对应的环境变量：AUTONOMY_URL / AUTONOMY_SESSION_ID / DIARY_INDEX（参数优先）。
+ * --session 一般填自主意识配置里的 wakeSession（$DSH_HOME/autonomy/config.json）。
  */
 import { readFileSync } from 'node:fs'
 
-const BASE = process.env.AUTONOMY_URL || 'http://10.8.0.10:3301'
-const DIARY_INDEX =
-  process.env.DIARY_INDEX || '/root/.dsh/plugins-data/aurabot/modules-data/local-diary/index.json'
-const CONFIG = '/root/.dsh/autonomy/config.json'
-
 const args = process.argv.slice(2)
-const dryRun = args.includes('--dry-run')
-const daysArg = args.indexOf('--days')
-const days = daysArg >= 0 ? Number(args[daysArg + 1]) : 0
+
+function flag(name) {
+  return args.includes(name)
+}
+
+function option(name) {
+  const at = args.indexOf(name)
+  return at >= 0 ? args[at + 1] : undefined
+}
+
+function required(what, value) {
+  const text = String(value ?? '').trim()
+  if (text === '') {
+    throw new Error(`缺少 ${what}：用命令行参数给，或用对应环境变量（见文件头用法）`)
+  }
+  return text
+}
+
+const dryRun = flag('--dry-run')
+const daysArg = option('--days')
+const days = daysArg === undefined ? 0 : Number(daysArg)
+if (Number.isNaN(days) || days < 0) throw new Error(`--days 要给正数，收到 ${daysArg}`)
+
+const BASE = required('--url', option('--url') ?? process.env.AUTONOMY_URL).replace(/\/+$/, '')
+const sessionId = required('--session', option('--session') ?? process.env.AUTONOMY_SESSION_ID)
+const DIARY_INDEX = required('--diary', option('--diary') ?? process.env.DIARY_INDEX)
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'))
@@ -67,7 +86,7 @@ function collectWishes(index) {
   return out
 }
 
-async function getLedger(sessionId) {
+async function getLedger() {
   const url = `${BASE}/api/dsh-autonomy/state?session=${encodeURIComponent(sessionId)}`
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
   if (!res.ok) throw new Error(`GET state 失败：HTTP ${res.status}`)
@@ -81,7 +100,7 @@ async function getLedger(sessionId) {
   return { open, settled }
 }
 
-async function createIntent(sessionId, text) {
+async function createIntent(text) {
   const url = `${BASE}/api/dsh-autonomy/action?session=${encodeURIComponent(sessionId)}`
   const res = await fetch(url, {
     method: 'POST',
@@ -95,17 +114,13 @@ async function createIntent(sessionId, text) {
 }
 
 async function main() {
-  const config = readJson(CONFIG)
-  const sessionId = process.env.AUTONOMY_SESSION_ID || String(config.wakeSession || '').trim()
-  if (sessionId === '') throw new Error('没有 wakeSession，也不在 AUTONOMY_SESSION_ID 里给')
-
   const wishes = collectWishes(readJson(DIARY_INDEX))
   if (wishes.length === 0) {
     console.log('日记里没有愿望，什么都不做。')
     return
   }
 
-  const { open, settled } = await getLedger(sessionId)
+  const { open, settled } = await getLedger()
   const existing = [...open, ...settled].map((intent) => String(intent.text || ''))
   const imported = []
   const skipped = []
@@ -115,7 +130,7 @@ async function main() {
       skipped.push(wish)
       continue
     }
-    if (!dryRun) await createIntent(sessionId, wish.text)
+    if (!dryRun) await createIntent(wish.text)
     existing.push(wish.text)
     imported.push(wish)
   }

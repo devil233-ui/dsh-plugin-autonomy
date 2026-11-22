@@ -53,7 +53,7 @@ test('review: 预算不够时先丢最旧的记录', () => {
 
 test('review: 回包不是 JSON 就用模板兜底', () => {
   const fallback: ReviewOutcome = { summary: 's', lessons: [], next: 'continued', memoryDrafts: [], fromModel: false };
-  assert.equal(parseReviewReply('模型只写了散文，没有 JSON', fallback), fallback);
+  assert.equal(parseReviewReply('她只写了散文，没有 JSON', fallback), fallback);
   assert.equal(parseReviewReply('{"lessons":["x"]}', fallback), fallback);
 });
 

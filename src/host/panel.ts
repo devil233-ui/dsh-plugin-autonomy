@@ -1,6 +1,6 @@
 /**
  * Host half of the panel: one snapshot GET, one closed action POST, one SSE
- * change stream. Same shape as the AstrBot page API (state / configure / wake /
+ * change stream. Same shape as the whalelife page API (state / configure / wake /
  * stop / self-cancel) plus the two intent mutations the ledger needs.
  *
  * The webserver service is looked up loosely: a headless host composes no

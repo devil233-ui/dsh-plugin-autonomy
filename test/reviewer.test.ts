@@ -1,8 +1,8 @@
 /**
  * 复盘的调度者（`src/host/reviewer.ts`）的钉子。
  *
- * 这里钉的是「什么时候跑」和「跑完落在哪」：门槛没到不许惊动模型、状态没
- * 落定不许跑、跑完必须写日刊并把 `lastReviewAt` 推上去；模型抛错时仍然要
+ * 这里钉的是「什么时候跑」和「跑完落在哪」：门槛没到不许惊动她、状态没
+ * 落定不许跑、跑完必须写日刊并把 `lastReviewAt` 推上去；她抛错时仍然要
  * 留下一份模板复盘，而不是什么都不写。
  */
 import assert from 'node:assert/strict';
@@ -45,7 +45,7 @@ function config(patch: Partial<AutonomyConfig> = {}): AutonomyConfig {
   return { ...DEFAULT_CONFIG, wakeSession: ROOM, reviewEnabled: true, reviewBatch: 3, reviewMinGapMinutes: 0, ...patch };
 }
 
-test('reviewer: 门槛没到就不惊动模型', async () => {
+test('reviewer: 门槛没到就不惊动她', async () => {
   await withStore(async (store) => {
     seed(store, 2);
     let called = 0;
@@ -111,7 +111,7 @@ test('reviewer: 到点就跑，日刊落盘、记忆写入、水位推进', asyn
   });
 });
 
-test('reviewer: 模型抛错也留一份模板复盘', async () => {
+test('reviewer: 她抛错也留一份模板复盘', async () => {
   await withStore(async (store, dir) => {
     seed(store, 3);
     const reviewer = new Reviewer({

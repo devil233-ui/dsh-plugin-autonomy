@@ -19,7 +19,7 @@ import { trimRuns } from '../core/run.js';
 
 export const STATE_VERSION = 1;
 
-/** A wake the model asked for itself (AstrBot's `self_wake`). */
+/** A wake the model asked for itself (whalelife's `self_wake`). */
 export interface SelfWake {
   /** Epoch milliseconds. */
   at: number;

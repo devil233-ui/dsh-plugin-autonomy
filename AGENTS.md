@@ -20,7 +20,7 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 - `src/host/`：宿主侧接线。`index.ts` 是入口（`name` / `inject` / `apply`），`scheduler.ts` 管节律，`wake.ts` 管唤醒与等待，`panel.ts` 管 HTTP 路由。
 - `src/client/`：设置页卡片，经 `settings.section` 插槽注册；不参与 host 构建。
 - `scripts/build-client.mjs`：客户端打包，负责外套 `window.__ModuleLoader__.load` 包装。
-- `scripts/sync-diary-wishes.mjs`：把日记（aurabot `local-diary`）里的愿望同步进意图台账；走面板 `intent-create` 接口，不直接改 `state.json`。定时任务在 crontab，日志 `/var/log/diary-wishes.log`。
+- `scripts/sync-diary-wishes.mjs`：把日记（aurabot `local-diary`）里的愿望同步进意图台账；走面板 `intent-create` 接口，不直接改 `state.json`。`--url` / `--session` / `--diary` 三项必填（无默认路径，跑在谁家机器上都一样），定时在 crontab，日志 `/var/log/diary-wishes.log`。
 
 ## 硬约束（踩过）
 - `GET /api/dsh-autonomy/state` 的 `sessions` 是**数组**，`openIntents`/`settledIntents` 在每一行里；读顶层同名键恒为空（2026-11-23 同步脚本据此去重失效，同一批愿望被导入两次，后来按 abandoned 收尾）。
@@ -28,7 +28,7 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 1. **客户端 bundle id 必须等于包名**。`__ModuleLoader__.load({ id })` 里的 id 与 `dsh.client` 声明不一致时，loader 会认为 bundle 没注册、再执行一次，页面报 `duplicate factory registration`，卡片不出现。
 2. **React 必须走 loader 注入**。客户端代码写 `import * as ReactNS from 'react'`（esbuild external 会编译成 factory 里的 `require("react")`），不要用 `ctx.get('react')`，那是 undefined。
 3. **`exports["."]` 指向 `lib/index.js`**。`tsc -p tsconfig.build.json` 的 rootDir 是 `src`，入口在 `src/index.ts`（转发 `host/index.js`），别直接指向 `lib/host/index.js`。
-4. **结算不能覆盖模型裁决**。`autonomy_finish` 写下的 decision 是模型自己的交代，日志推断只能兜底：`if (current.status === 'completed') return;`。配套两处缺一不可：`canFinish()` 必须放行 `settling`（投递成功那一刻 run 就进 settling，模型的收尾永远落在它之后，只认 `running` 会 100% 被拒）；观察器不能把 `autonomy_finish` 这次工具调用算成「做了事」。
+4. **结算不能覆盖她的裁决**。`autonomy_finish` 写下的 decision 是她自己的交代，日志推断只能兜底：`if (current.status === 'completed') return;`。配套两处缺一不可：`canFinish()` 必须放行 `settling`（投递成功那一刻 run 就进 settling，她的收尾永远落在它之后，只认 `running` 会 100% 被拒）；观察器不能把 `autonomy_finish` 这次工具调用算成「做了事」。
 5. **观察器认的事件名是本机宿主的**：助手发言是 `assistant/message`（不是 `message/inserted`），`time` 是毫秒数（不是 ISO 字符串）。两处都写错过一次，后果是「她说了什么」永远读不到、`minIdleMinutes` 静默失效。
 6. **冷会话按 `sessionController.resolveAgent` 恢复**，别裸调 `agents.resume({resumeSessionId})`：后者不带预设与模型，`agent.options.model` 为空，人设段的 `{{model}}` 拼不出来，整轮直接 `prompt variable "{{model}}" has no value`（2026-11-19 实测）。控制器不在的宿主再退回裸 resume。
 7. **面板要遍历全部已记录会话**，不只是当前 live 的：`StateStore.sessionIds()` 保证冷会话的历史仍然可见。`todayRuns` 是它们的合并时间线，按配置时区切「今天」，别用 `Date` 的本地日界。
@@ -37,7 +37,7 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 10. **说话是三道闸，顺序不能换**：①主人私聊恒放行（不写 `target` 就是发主人，不需要配置）；②`config.speakTargets` 只加「除主人之外」的去处，空 = 除主人外一律不发，拒绝话术里要写明主人私聊仍可用；③插队守卫：那个聊天有人说了话她还没回 → 拒；同一聊天冷却期内（`speakCooldownMinutes`，默认 3，0=关）说过 → 拒。守卫全部从 `aurabot.events()` 的事件环重算，不另存状态；读不到事件环就退化成只查名单，不能因此把发言全堵死。
 11. **唤醒永不抛异常**。宿主是 fail-loud（未捕获异常直接 exit(1)），而 `sessionController.resolveAgent` 可能返回 `{error}`；早期 `pickAgent` 把它当 agent、读 `.session.seq` 就把整个宿主带走了（2026-11-19 一次真实唤醒）。`looksLikeAgent` 必须验 `followup` 是函数、`session.seq` 是数字；`wake()` 外层 catch 成 `{status:'error'}`，调度侧再兜一层。
 12. **台账是跨会话的**。账本归 `config.wakeSession`（落点空时归工具所在会话），`autonomy_intents` 读写要合并「本会话 + 落点会话」，`revise/complete/abandon` 必须先找到真正持有该 id 的会话再改；面板行要带 `ownerSessionId`，否则在唤醒房间点「完成」会报 `no intent <id>`。
-13. **复盘不碰唤醒节奏**。攒够 `reviewBatch` 条判断（默认 5）、且距上次至少 `reviewMinGapMinutes`（默认 120）分钟，调度器才跑一次；它不改任何会话的 `nextCheckAt`、不占聊天会话，模型通道走 `aurabot.hub.runSystemTurn('autonomy-review', …, { noTools: true, key: 'review' })`，没装 aura 就退回 `templateReview` 的确定性模板。产出追加到 `<dataDir>/journal/<date>.md`，`memoryDrafts` 经 `aurabot.call({module:'memory', method:'addEvent'})` 落记忆。token 预算按 2 字符≈1 token 粗估，超了从最旧的记录开始裁（`buildReviewPrompt`）。
+13. **复盘不碰唤醒节奏**。攒够 `reviewBatch` 条判断（默认 5）、且距上次至少 `reviewMinGapMinutes`（默认 120）分钟，调度器才跑一次；它不改任何会话的 `nextCheckAt`、不占聊天会话，那一轮走 `aurabot.hub.runSystemTurn('autonomy-review', …, { noTools: true, key: 'review' })`，没装 aura 就退回 `templateReview` 的确定性模板。产出追加到 `<dataDir>/journal/<date>.md`，`memoryDrafts` 经 `aurabot.call({module:'memory', method:'addEvent'})` 落记忆。token 预算按 2 字符≈1 token 粗估，超了从最旧的记录开始裁（`buildReviewPrompt`）。
 14. **打分是纯函数，可复算**。`src/core/score.ts` 只看 `dueAt/preferredAt/kind/source` 与传入的 `recent` 文本，权重 `SCORE_WEIGHTS` 固定；`scoreEnabled` 只决定是否把候选塞进 framing，不改变台账状态（低分的意图仍然开着）。
 
 ## 与 aurabot 的边界

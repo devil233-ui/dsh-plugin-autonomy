@@ -46,7 +46,7 @@ function textOf(blocks: readonly MinimalBlock[]): string {
 /**
  * 记账用的工具，不算「做了事」。
  *
- * 模型收尾时一定要调 `autonomy_finish`，它本身也是一次 tool/call；把它算进动作，
+ * 她收尾时一定要调 `autonomy_finish`，它本身也是一次 tool/call；把它算进动作，
  * 会让每一个判空的回合都被记成 acted。
  */
 const BOOKKEEPING_TOOLS = new Set(['autonomy_finish']);

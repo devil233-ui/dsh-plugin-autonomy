@@ -51,7 +51,7 @@ export const CONFIG_GROUPS: GroupSpec[] = [
     title: '唤醒落点与会话',
     fields: [
       { key: 'wakeSession', label: '唤醒落点（首选）', hint: '填了就只在这一条会话里醒，下面那栏完全不看', kind: 'text' },
-      { key: 'wakeWorkspace', label: '房间所在工作区', hint: '工作区 id 或绝对路径（如 /root/鱼）；留空=宿主默认', kind: 'text' },
+      { key: 'wakeWorkspace', label: '房间所在工作区', hint: '工作区 id 或绝对路径（例如 /srv/agent-workspace）；留空=宿主默认', kind: 'text' },
       { key: 'wakeTitle', label: '房间标题', hint: '新建房间时用这个名字；留空=「自主意识 · 她的房间」', kind: 'text' },
       { key: 'sessions', label: '目标会话（落点为空时才用）', hint: '填了 = 只醒这几条；这栏也空 = 全部根会话（含 QQ 聊天，会打扰对话）', kind: 'list' },
     ],
@@ -81,7 +81,7 @@ export const CONFIG_GROUPS: GroupSpec[] = [
     title: '记忆召回',
     fields: [
       { key: 'recallEnabled', label: '醒来前先查记忆库', hint: '按这一轮的意图当关键词，把查到的几段塞进提示词；查不到就当没有', kind: 'bool' },
-      { key: 'recallUrl', label: '召回接口', hint: '默认指向本机 MemoryConstellations 的 /api/recall', kind: 'text' },
+      { key: 'recallUrl', label: '召回接口', hint: '填 MemoryConstellations 的 /api/recall 地址，例如 http://127.0.0.1:3100/api/recall；留空=不查', kind: 'text' },
       { key: 'recallLimit', label: '最多几条', kind: 'number', step: '1' },
       { key: 'recallTimeoutMs', label: '超时（毫秒）', hint: '查不到就跳过，不耽误这一轮', kind: 'number', step: '100' },
       { key: 'recallMaxChars', label: '最多塞多少字', kind: 'number', step: '50' },

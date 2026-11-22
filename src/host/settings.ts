@@ -1,10 +1,10 @@
 /**
  * Configuration: defaults, validation, and the config.json overlay.
  *
- * The knobs mirror the AstrBot/whalelife autonomy plugin so an operator can
+ * The knobs mirror the whalelife autonomy plugin so an operator can
  * carry settings across: an average check interval, a probability gate, an
  * optional adaptive multiplier keyed on time since last activity, and quiet
- * (sleep) windows. Two knobs are DSH-specific and have no AstrBot peer:
+ * (sleep) windows. Two knobs are DSH-specific and have no whalelife peer:
  * `minIdleMinutes` (never wake an agent that is still working) and
  * `sessions` (which agent sessions this host should consider).
  */
@@ -138,8 +138,8 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   reviewMinGapMinutes: 120,
   reviewMaxInputTokens: 4096,
   reviewMaxOutputTokens: 512,
-  recallEnabled: true,
-  recallUrl: 'http://127.0.0.1:3100/api/recall',
+  recallEnabled: false,
+  recallUrl: '',
   recallLimit: 4,
   recallTimeoutMs: 1200,
   recallMaxChars: 600,

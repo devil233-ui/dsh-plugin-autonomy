@@ -5,7 +5,7 @@
  * 为什么出手，攒着不会自己变成经验。复盘就是把这些记录在**够数的时候**交给
  * 一个不占任何会话的回合去蒸馏，产出「教训 / 下次还做吗 / 值得记住的话」。
  *
- * 这一层只做纯函数：拼输入、按 token 预算裁、解析回包、渲染日刊。模型不答
+ * 这一层只做纯函数：拼输入、按 token 预算裁、解析回包、渲染日刊。她不答
  * 或答歪了就退回确定性模板——复盘失败不该把她的判断一起丢掉。
  */
 
@@ -122,7 +122,7 @@ export function parseReviewReply(raw: string, fallback: ReviewOutcome): ReviewOu
   return { summary, lessons: strings(record['lessons']), next, memoryDrafts: strings(record['memoryDrafts']), fromModel: true };
 }
 
-/** 模型没答上来时的产出：只陈述记录里确实发生的事，不替她编判断。 */
+/** 她没答上来时的产出：只陈述记录里确实发生的事，不替她编判断。 */
 export function templateReview(runs: readonly RunRecord[], intents: readonly Intent[]): ReviewOutcome {
   const stats = reviewStats(runs, intents);
   const lessons: string[] = [];

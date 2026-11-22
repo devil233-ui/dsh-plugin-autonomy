@@ -1,7 +1,7 @@
 /**
  * 纯逻辑：节律、概率、睡眠窗口。不 import 任何 @deepseek-ai/*，可在裸 Node 下单测。
  *
- * 语义来源是 AstrBot autonomy：插件按平均间隔掷一次骰，实际等待在间隔附近抖动；
+ * 语义来源是 whalelife-plugin-autonomy：插件按平均间隔掷一次骰，实际等待在间隔附近抖动；
  * 每次检查按概率决定醒不醒；睡眠时段内不醒。
  */
 
@@ -211,7 +211,7 @@ export function offsetLabel(now: Date, timeZone: string): string {
 }
 
 /**
- * 给模型看的本地时间，形如 `2026-11-18 19:30:00 (+08:00, Asia/Shanghai)`。
+ * 给她看的本地时间，形如 `2026-11-18 19:30:00 (+08:00, Asia/Shanghai)`。
  * 只用于唤醒文案与记录，不参与判断。
  */
 export function formatLocalStamp(now: Date, timeZone: string): string {

@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-autonomy",
   "version": "0.1.0",
-  "description": "Autonomy for DeepSeekRuntime: the plugin keeps the rhythm, the agent makes the call. Interval + dice-roll wake-ups, intent ledger, judgement records, and a web panel. dsh-plugin-autonomy：把 AstrBot autonomy 的语义搬到 DSH——由插件按节律掷骰决定要不要叫醒会话，模型醒来后自己决定行动或沉默；带意图台账、判断记录与面板。",
+  "description": "DSH 大肥鱼自主意识插件：外部节律 + 概率掷骰唤醒，她自行决定行动还是沉默，带意图台账、判断记录与面板，可选对接 aura 部分模块。Autonomy for DeepSeekRuntime: the host keeps the rhythm, she decides whether to act or stay quiet.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -20,7 +20,7 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
-    "AGENTS.md"
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -81,5 +81,12 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.9.3"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devil233-ui/dsh-plugin-autonomy.git"
+  },
+  "homepage": "https://github.com/devil233-ui/dsh-plugin-autonomy#readme",
+  "author": "devil233-ui"
 }
