@@ -178,6 +178,11 @@ export function apply(ctx: Context): void {
     config: () => config,
     state,
     scheduler,
+    // 愿望栏：她可以自己 list / drop（台账之外，不当待办）。
+    wishes: {
+      list: () => wishStore.list(),
+      drop: (id: string) => wishStore.drop(id),
+    },
     now: () => Date.now(),
     log: (level: 'info' | 'warn' | 'error', message: string) => logger[level](message),
     // 说话走 aura 的服务（同进程直接调用），不经它的 tools.restrict：

@@ -41,6 +41,11 @@ export interface ToolServices {
    * tell whether a chat is mid-exchange. Absent without aura as well.
    */
   recentEvents?(): Promise<unknown>;
+  /** 愿望栏（日记里的愿望，不是待办）。 */
+  wishes?: {
+    list(): readonly { id: string; text: string; day: string; source: string }[];
+    drop(id: string): boolean;
+  };
 }
 
 function renderValue(_args: unknown, value: unknown): ContentBlock[] {
@@ -457,6 +462,37 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
         return json({ session_id: sessionId, run_id: runId, decision, reason });
       },
       presentCall: (callArgs) => presentCard('Finish autonomy turn', str((callArgs as { decision?: unknown })['decision'])),
+    }),
+    defineTool({
+      name: 'autonomy_wishes',
+      description:
+        'Wishes from your diary (written by the aura local-diary module). They are kept apart from the intent ledger because they are not todos: some are large or long-term and may never happen. action=list shows each wish with the diary day and the original file path so you can read the source; action=drop removes one you no longer want to keep.',
+      parameters: {
+        action: { type: 'string', required: true, description: 'list | drop' },
+        id: { type: 'string', description: 'wish id (required for drop)' },
+      },
+      output: { schema: { type: 'object', additionalProperties: true }, render: renderValue },
+      async execute(args) {
+        const store = services.wishes;
+        if (store === undefined) return json({ error: 'wish store unavailable' });
+        const action = str(args['action']);
+        if (action === 'list') {
+          const wishes = store.list().map((wish) => ({
+            id: wish.id,
+            text: wish.text,
+            day: wish.day,
+            source: wish.source,
+          }));
+          return json({ count: wishes.length, wishes });
+        }
+        if (action === 'drop') {
+          const id = str(args['id']);
+          if (id === '') return json({ error: 'id required for drop' });
+          return json(store.drop(id) ? { dropped: id } : { error: `no wish ${id}` });
+        }
+        return json({ error: 'action must be list or drop' });
+      },
+      presentCall: (callArgs) => presentCard('Diary wishes', str((callArgs as { action?: unknown })['action'])),
     }),
   ];
 }

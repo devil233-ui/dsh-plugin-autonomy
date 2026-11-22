@@ -36,3 +36,28 @@ test('trimWishes 超限时丢最旧的', () => {
   const kept = trimWishes(list, 2);
   assert.deepEqual(kept.map((row) => row.id), ['b', 'c']);
 });
+
+test('WishStore：去重、划掉、落盘后能读回', async () => {
+  const { mkdtempSync, rmSync, existsSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { WishStore } = await import('../src/host/wishes.js');
+
+  const dir = mkdtempSync(join(tmpdir(), 'wish-'));
+  try {
+    const file = join(dir, 'wishes.json');
+    const store = new WishStore({ file, now: () => 1_700_000_000_000, idFactory: () => 'w1' });
+    const first = store.add({ text: '房子里养只猫', day: '2026-11-22', source: '/srv/d.md' });
+    assert.equal(first.ok, true);
+    assert.equal(store.add({ text: ' 房子里养只猫。', day: '2026-11-22', source: '/srv/d.md' }).ok, false);
+    assert.equal(existsSync(file), true);
+
+    const again = new WishStore({ file, now: () => 1_700_000_000_000 });
+    assert.equal(again.list().length, 1);
+    assert.equal(again.drop('w1'), true);
+    assert.equal(again.drop('w1'), false);
+    assert.equal(new WishStore({ file, now: () => 0 }).list().length, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

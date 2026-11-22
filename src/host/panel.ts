@@ -112,6 +112,7 @@ export type PanelAction =
   | { type: 'cancel-self'; sessionId?: string }
   | { type: 'intent-create'; sessionId?: string; text: string; kind?: string; dueAt?: string; preferredAt?: string }
   | { type: 'intent-settle'; sessionId?: string; id: string; state: 'done' | 'abandoned'; version: number; reason?: string }
+  | { type: 'intent-delete'; sessionId?: string; id: string }
   | { type: 'wish-create'; text: string; day?: string; source?: string }
   | { type: 'wish-drop'; id: string };
 
@@ -434,6 +435,23 @@ export class PanelService {
           if (!settled.ok) throw new Error(settled.error);
           this.#deps.state.update(owner, (entry) => {
             entry.intents = entry.intents.map((row) => (row.id === id ? settled.value : row));
+          }, now);
+          break;
+        }
+        case 'intent-delete': {
+          if (target === undefined) throw new Error('sessionId required');
+          const id = typeof body['id'] === 'string' ? body['id'] : '';
+          // 与 intent-settle 一样按真实持有者定位（聚合视图会借用别的会话的行）。
+          let owner = '';
+          for (const sid of [target, ...this.#deps.state.sessionIds()]) {
+            if (this.#deps.state.session(sid, now)?.intents.some((row) => row.id === id) === true) {
+              owner = sid;
+              break;
+            }
+          }
+          if (owner === '') throw new Error(`no intent ${id}`);
+          this.#deps.state.update(owner, (entry) => {
+            entry.intents = entry.intents.filter((row) => row.id !== id);
           }, now);
           break;
         }
