@@ -47,6 +47,8 @@ dsh plugin add <本仓库路径或包名>
 
 配置落在 `<DSH_HOME>/autonomy/config.json`，面板可改，也可直接编辑后刷新。
 
+**节律**
+
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
 | `enabled` | `true` | 关闭后不再掷骰，手动触发仍可用 |
@@ -54,48 +56,110 @@ dsh plugin add <本仓库路径或包名>
 | `jitterRatio` | `0.1` | 抖动比例，实际等待 = 间隔 ×(1 ± 抖动)。设 `0.5` 即上游「50%～150%」语义 |
 | `probability` | `0.2` | 每次掷骰唤醒的概率 |
 | `mode` | `fixed` | `fixed` 用原概率；`adaptive` 按距上次活动调整 |
-| `adaptive.recentMinutes` | `20` | 距上次活动小于此值视为"刚聊过" |
-| `adaptive.recentMultiplier` | `0.15` | 刚聊过时概率乘数 |
-| `adaptive.distantMinutes` | `360` | 距上次活动超过此值视为"冷落已久" |
-| `adaptive.distantMultiplier` | `1.5` | 冷落已久时概率乘数 |
+| `adaptive.recentMinutes` / `recentMultiplier` | `20` / `0.15` | 距上次活动小于此值视为「刚聊过」 |
+| `adaptive.distantMinutes` / `distantMultiplier` | `360` / `1.5` | 距上次活动超过此值视为「冷落已久」 |
 | `sleepWindows` | `[]` | 如 `["23:00-08:00"]`；支持跨夜、多段，以及 `"23:00-08:00@5-1"` 这种「周五 23:00 → 周一 08:00」的跨周窗口（0=周日…6=周六） |
 | `timezone` | `""` | 判断用的时区；留空用宿主时区 |
 | `allowSelfWake` | `true` | 是否允许她用 `autonomy_schedule` 给自己排唤醒 |
-| `motivation` | `""` | 覆盖自主回合开场那段「决定做什么」的文案；留空用内置 |
 | `selfWakeDuringSleep` | `false` | 她自排的唤醒是否允许落在睡眠窗口 |
 | `maxRunsPerDay` | `20` | 每日判断次数上限，`0` 不限 |
 | `minIdleMinutes` | `0` | 距上次活动不足此值则不掷骰 |
 | `sessions` | `[]` | 目标会话；留空则管理全部根会话 |
 | `maxRuns` / `maxIntents` | `20` / `50` | 每个会话保留的记录条数 |
 
+**唤醒落点与说话**
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `wakeSession` | `""` | 唤醒落点；非空时只在这一个会话里掷骰、记账、记台账 |
+| `wakeWorkspace` / `wakeTitle` | `""` | 面板「建一个她的会话」时用的工作区与标题 |
+| `speakTargets` | `[]` | 除主人私聊之外允许说话的去处（`group:<群号>`）；空 = 只发主人 |
+| `speakCooldownMinutes` | `3` | 同一个聊天两次发言的最短间隔，`0` 关掉冷却 |
+| `outboxTtlMinutes` | `10` | 排队等对方安静的发言最多存多久，`0` = 只拒绝不排队 |
+
+**判断与提示**
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `scoreEnabled` | `true` | 醒来前给台账打分排序，决定把哪几条摆到眼前 |
+| `scoreThreshold` | `0.5` | 低于这个分数的条目不上提示（台账里仍然开着） |
+| `moodEnabled` | `true` | 读她的心情调制这一轮摆什么（只动阈值与条数，不动节奏） |
+| `recallSource` | `off` | 记忆召回从哪儿取：`off` / `http` / `aurabot` |
+| `recallUrl` | `""` | `http` 源用的地址，兼容 `POST /api/recall`（MC 是其中一种） |
+| `recallLimit` / `recallTimeoutMs` / `recallMaxChars` | `4` / `1200` / `600` | 召回条数、超时、塞进提示的最大字数 |
+| `motivation` | `""` | 覆盖自主回合开场那段「决定做什么」的文案；留空用内置 |
+
+**复盘**
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `reviewEnabled` | `true` | 攒够判断就让她复盘一次 |
+| `reviewBatch` / `reviewMinGapMinutes` | `5` / `120` | 攒够几条、距上次多久才跑 |
+| `reviewMaxInputTokens` / `reviewMaxOutputTokens` | `4096` / `512` | 复盘的 token 预算，超了从最旧的一条开始裁 |
+| `reviewWriteMemory` | `false` | 复盘产出的记忆草稿是否写回 dsh-aurabot-qq 的 memory 模块 |
+
 ## 测试
 
 ```bash
-pnpm test      # core 纯逻辑 + 宿主契约测试
+rm -rf dist && pnpm test   # 118 个用例
 ```
 
 - `test/core.test.ts`：间隔抖动、概率（fixed/adaptive）、睡眠窗口（跨夜/跨周/坏配置）、意图状态机、判断记录状态机。
-- `test/contracts.test.ts`：`quiet-contract`（睡眠期不醒且不丢安排）、`queue-contract`（自排优先于随机、原子消耗、未命中照常推进时钟）、`daily-budget`、`recovery-contract`（重启时在飞的判断判中断不重放）、`settling`、`cancel-contract`。
+- `test/score.test.ts` / `test/chill.test.ts` / `test/mood.test.ts`：打分各分项与排序、冷度与暂停、心情调制（阈值与条数、读不到就当没有）。
+- `test/recall.test.ts` / `test/wish.test.ts`：三种召回源与旧配置迁移、愿望去重与划掉。
+- `test/review.test.ts` / `test/reviewer.test.ts`：复盘的触发条件、落盘与模板兜底。
+- `test/contracts.test.ts`：`quiet-contract`、`queue-contract`、`daily-budget`、`recovery-contract`、`settling`、`cancel-contract`、`wake-room`、`speak-contract`、`wish-contract`、`ledger-*`。
 
 ## 工具
 
-她在会话里可以调用四个工具：
+她会话里可以调用五个工具：
 
 - `autonomy_schedule`：`get` 看待机状态，`set` 指定 `at`（`YYYY-MM-DDTHH:MM`）或 `in_minutes` 排一次自排唤醒，`cancel` 撤销。`set`/`cancel` 都支持 `version`（陈旧版本拒覆盖）与 `requestId`（同一 id 重复提交不重排）。`allowSelfWake=false` 时 `set`/`cancel` 一律拒绝。
 - `autonomy_intents`：`list` 看未完成意图，`remember` 记一条（`kind=agreement` 必须给 `due_at`），`revise` 改，`complete` / `abandon` 收尾（都要带 `version` 防覆盖）。
-- `autonomy_say`：`{ target, text }` 把一句话发出去。`target` 留空 = 发主人私聊，`group:<群号>` / `private:<QQ号>` 自己挑；能不能发由 dsh-aurabot-qq 的出站规则裁决，插件这边只管名单、插队守卫与冷却。
+- `autonomy_wishes`：`list` 看日记里的愿望（带日期与原文路径），`drop` 划掉一条。
+- `autonomy_say`：`{ target, text }` 把一句话发出去。`target` 留空 = 发主人私聊，`group:<群号>` 自己挑；发不出去时可用 `when_free` 排队，并声明 `why`。
 - `autonomy_finish`：结束当前自主轮，`decision` 取 `acted` 或 `no_action`，`reason` 一句话。只对进行中的 run 有效；不调用也能收尾，此时按事件日志推断。
 
 ## 面板
 
-设置 → Autonomy：
+设置 → Autonomy 里只有一行状态和「打开面板」，真正的界面在独立页面（`/dsh-autonomy`）：
 
-- 配置区：上面 12 个常用键，保存即写盘。
-- 会话区：`现在判断一次`、`取消自排唤醒`、`结束并取消排队`。
-- 意图台账：新增、完成、放弃。
-- 最近的判断：trigger / status / decision 徽章 + 理由 + 时间。
+- **概览**：今天的判断数、未完成意图、下一次掷骰、唤醒落点；今天的判断流水。
+- **判断记录**：跨会话的全部判断，可按触发方式、结果、会话筛选，也能按理由里的字搜；分页。
+- **意图台账**：想法与约定，带到期、冷度与暂停状态。
+- **愿望**：日记里许的愿，带日期与原文路径，可手动补记或划掉。
+- **排程**：下一次掷骰、自排唤醒、手动「现在判断一次」。
+- **配置**：上面那些键，保存即写盘。
 
-面板走 `/api/dsh-autonomy/{state,action,events}`，前端通过 SSE 自动刷新。
+面板走 `/api/dsh-autonomy/{state,action,events,runs}`，前端通过 SSE 自动刷新。
+
+## 心情
+
+她的心情读自 dsh-aurabot-qq 的心情模块（`ctx.get('aurabot').use('mood').state()`），**只影响这一轮把什么摆到眼前**：低于 40 分时打分门槛 +0.1、候选上限压到 2；高于 75 分时门槛 −0.05；中间档原样。掷骰、间隔、睡眠窗、每日预算一律不动。没装该插件、或它没开心情模块，就直接跳过这一档。每轮读到的心情会写进判断记录（形如 `mood 60/100 平平常常`）。
+
+## 打分与候选
+
+醒来前把全库未完成的意图汇总，按一个纯函数打分排序：`0.4×紧迫 + 0.3×新鲜 + 0.2×来源 + 0.1×承诺`。紧迫看 `dueAt`／`preferredAt` 与现在的距离；新鲜是与最近几条已收尾意图、最近几条判断理由的文本重合度；来源分主人／对话／自己；承诺看是约定、自排还是念头。过了门槛（`scoreThreshold`）的前三条进提示，其余仍开着，只是这一轮不摆。
+
+连续几轮被摆到眼前却始终没动的条目会累积冷度（每漏一次 +0.5），到 2 就暂停 7 天；她真动手（`acted`）就清零。
+
+## 复盘
+
+攒够 `reviewBatch` 条判断、且距上次至少 `reviewMinGapMinutes` 分钟，调度器在空闲时段跑一次复盘：把这段时间的判断与意图整理成一页日刊，追加到 `<dataDir>/journal/<date>.md`。这一轮借 dsh-aurabot-qq 的系统回合（`noTools: true`），没装它就退回确定性模板。它不改任何会话的唤醒时间。
+
+## 记忆召回
+
+醒来前可以拿台账当关键词去查一段旧事，塞进提示词。三种源：
+
+- `off`：不查；
+- `http`：`POST` 到 `recallUrl`，任何兼容 `/api/recall` 的服务都行（MemoryConstellations 是其中一种）；
+- `aurabot`：直接问 dsh-aurabot-qq 的 memory 模块（`recallAsync`），不用填地址。
+
+查不到就当这轮没有记忆，不阻断唤醒；`off` 时连请求都不发。
+
+## 说话与待发队列
+
+`autonomy_say` 有三道闸：主人私聊恒放行；`speakTargets` 里的群才允许发；目标聊天里有人说了话她还没回、或同一个聊天还在冷却期，一律拒。拒了可以用 `when_free` 排队，等对方安静后由调度器每轮扫描时补发，超过 `outboxTtlMinutes` 作废。真正投递走 dsh-aurabot-qq 出站通道，它自己的名单、试运行与总开关仍然生效。
 
 ## 日记愿望接台账
 

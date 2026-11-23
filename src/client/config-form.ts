@@ -162,7 +162,7 @@ export function ConfigForm(props: {
     if (spec.kind === 'bool') {
       const checked = value === 'true';
       return React.createElement('label', { className: 'da-field', key },
-        React.createElement('span', { className: 'da-label' }, spec.label),
+        React.createElement('span', { className: 'da-label' }, spec.label, spec.hint === undefined ? null : React.createElement('span', { className: 'da-hint' }, ` · ${spec.hint}`)),
         React.createElement('span', { className: 'da-check' },
           React.createElement('input', {
             type: 'checkbox',
