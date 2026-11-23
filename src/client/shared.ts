@@ -46,7 +46,7 @@ export interface ConfigView {
   reviewMinGapMinutes: number;
   reviewMaxInputTokens: number;
   reviewMaxOutputTokens: number;
-  recallEnabled: boolean;
+  recallSource: string;
   recallUrl: string;
   recallLimit: number;
   recallTimeoutMs: number;

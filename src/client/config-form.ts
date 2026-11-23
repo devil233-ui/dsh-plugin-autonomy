@@ -11,7 +11,7 @@ import type { ReactElement } from 'react';
 
 import type { ConfigView } from './shared.js';
 
-type FieldKind = 'number' | 'text' | 'list' | 'bool';
+type FieldKind = 'number' | 'text' | 'list' | 'bool' | 'select';
 
 interface FieldSpec {
   key: keyof ConfigView;
@@ -19,6 +19,8 @@ interface FieldSpec {
   hint?: string;
   kind: FieldKind;
   step?: string;
+  /** kind='select' 时的候选项。 */
+  options?: Array<{ value: string; label: string }>;
 }
 
 interface GroupSpec {
@@ -80,8 +82,8 @@ export const CONFIG_GROUPS: GroupSpec[] = [
   {
     title: '记忆召回',
     fields: [
-      { key: 'recallEnabled', label: '醒来前先查记忆库', hint: '可选：醒来前拿台账当关键词，去你自己部署的记忆库查一段旧事塞进提示词；地址为空时整段跳过', kind: 'bool' },
-      { key: 'recallUrl', label: '召回接口', hint: '可选。填你那套 MemoryConstellations 的 /api/recall 地址（部署在哪就填哪）；留空=不查，不影响其他功能', kind: 'text' },
+      { key: 'recallSource', label: '醒来前查记忆库', kind: 'select', hint: 'off=不查；http=自己填一个兼容 /api/recall 的服务；aurabot=直接问 dsh-aurabot-qq 的记忆模块，不用填地址', options: [{ value: 'off', label: '不查' }, { value: 'http', label: 'HTTP 接口' }, { value: 'aurabot', label: 'dsh-aurabot-qq 记忆库' }] },
+      { key: 'recallUrl', label: '召回接口', hint: '只在「HTTP 接口」时用：任何兼容 /api/recall 的服务都行（MemoryConstellations 是其中一种）', kind: 'text' },
       { key: 'recallLimit', label: '最多几条', kind: 'number', step: '1' },
       { key: 'recallTimeoutMs', label: '超时（毫秒）', hint: '查不到就跳过，不耽误这一轮', kind: 'number', step: '100' },
       { key: 'recallMaxChars', label: '最多塞多少字', kind: 'number', step: '50' },
@@ -170,6 +172,18 @@ export function ConfigForm(props: {
           }),
           React.createElement('span', {}, checked ? '开' : '关'),
         ),
+      );
+    }
+
+    if (spec.kind === 'select') {
+      return React.createElement('label', { className: 'da-field', key },
+        React.createElement('span', { className: 'da-label' }, spec.label, spec.hint === undefined ? null : React.createElement('span', { className: 'da-hint' }, ` · ${spec.hint}`)),
+        React.createElement('select', {
+          className: 'da-select',
+          value,
+          disabled,
+          onChange: (event: { target: { value: string } }) => touch(key, event.target.value),
+        }, ...(spec.options ?? []).map((option) => React.createElement('option', { key: option.value, value: option.value }, option.label))),
       );
     }
 

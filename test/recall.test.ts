@@ -30,6 +30,7 @@ test('recall: 客户端把结果交给 formatRecall，HTTP 失败返回空并告
   const warns: string[] = [];
   const make = (impl: typeof fetch) =>
     new MemoryRecall({
+      source: () => 'http' as const,
       url: () => 'http://127.0.0.1:3100/api/recall',
       limit: () => 4,
       timeoutMs: () => 500,
@@ -46,4 +47,41 @@ test('recall: 客户端把结果交给 formatRecall，HTTP 失败返回空并告
   assert.equal(await bad.recall('答应'), '');
   assert.equal(warns.length, 1);
   assert.match(warns[0] as string, /recall HTTP 502/);
+});
+
+test('recall: 三种源——off 不发请求，aurabot 走 memory 模块并拼成几行', async () => {
+  const { normalizeRecallSource } = await import('../src/core/recall.js');
+  assert.equal(normalizeRecallSource('off'), 'off');
+  assert.equal(normalizeRecallSource('aurabot'), 'aurabot');
+  // 旧配置迁移
+  assert.equal(normalizeRecallSource(undefined, true, 'http://x/api/recall'), 'http');
+  assert.equal(normalizeRecallSource(undefined, true, ''), 'off');
+  assert.equal(normalizeRecallSource(undefined, false, 'http://x'), 'off');
+
+  let called = 0;
+  const off = new MemoryRecall({
+    source: () => 'off' as const,
+    url: () => 'http://127.0.0.1:3100/api/recall',
+    limit: () => 4,
+    timeoutMs: () => 500,
+    maxChars: () => 200,
+    fetchImpl: (async () => {
+      called += 1;
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch,
+  });
+  assert.equal(await off.recall('答应'), '');
+  assert.equal(called, 0);
+
+  const aura = new MemoryRecall({
+    source: () => 'aurabot' as const,
+    aurabot: () => ({
+      call: async () => ({ ok: true, result: [{ it: { text: '主人常熬夜' } }, { it: { text: '答应过要早睡' } }] }),
+    }),
+    url: () => '',
+    limit: () => 4,
+    timeoutMs: () => 500,
+    maxChars: () => 200,
+  });
+  assert.equal(await aura.recall('熬夜'), '- 主人常熬夜\n- 答应过要早睡');
 });

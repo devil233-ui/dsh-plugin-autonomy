@@ -6,6 +6,23 @@
  * 以及在塞进提示词之前把它裁到预算内。
  */
 
+/**
+ * 召回从哪儿取。刻意做成三选一，而不是默认「装了 MC 才有」：
+ * - off      不查；
+ * - http     任何兼容 `POST /api/recall` 的服务（MC 是其中一种）；
+ * - aurabot  走 dsh-aurabot-qq 的 memory 模块（`recallAsync`），不需要填地址，也不需要 MC。
+ */
+export type RecallSource = 'off' | 'http' | 'aurabot';
+
+export const RECALL_SOURCES: readonly RecallSource[] = ['off', 'http', 'aurabot'];
+
+/** 旧配置只有 `recallEnabled` + `recallUrl`：开着且填了地址就落到 http，其余一律 off。 */
+export function normalizeRecallSource(raw: unknown, legacyEnabled?: unknown, url?: unknown): RecallSource {
+  if (raw === 'off' || raw === 'http' || raw === 'aurabot') return raw;
+  if (legacyEnabled === true && String(url ?? '').trim() !== '') return 'http';
+  return 'off';
+}
+
 export interface RecallPayload {
   success?: unknown;
   count?: unknown;

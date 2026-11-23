@@ -12,6 +12,7 @@
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { normalizeRecallSource, type RecallSource } from '../core/recall.js';
 import { parseSleepWindows, type ProbabilityInput } from '../core/schedule.js';
 
 export interface AdaptiveConfig {
@@ -89,7 +90,8 @@ export interface AutonomyConfig {
    */
   moodEnabled: boolean;
   /** 醒来前先查一遍记忆库，把查到的几段塞进这一轮的提示词。 */
-  recallEnabled: boolean;
+  /** 召回从哪儿取：off / http / aurabot（见 core/recall.ts）。 */
+  recallSource: RecallSource;
   /** 记忆库的只读召回接口（MemoryConstellations）。 */
   recallUrl: string;
   recallLimit: number;
@@ -138,7 +140,7 @@ export const DEFAULT_CONFIG: AutonomyConfig = {
   reviewMinGapMinutes: 120,
   reviewMaxInputTokens: 4096,
   reviewMaxOutputTokens: 512,
-  recallEnabled: false,
+  recallSource: 'off',
   recallUrl: '',
   recallLimit: 4,
   recallTimeoutMs: 1200,
@@ -224,7 +226,7 @@ export function normalizeConfig(raw: unknown, base: AutonomyConfig = DEFAULT_CON
     reviewMinGapMinutes: Math.round(numberOr(input.reviewMinGapMinutes, base.reviewMinGapMinutes, 0, 1440)),
     reviewMaxInputTokens: Math.round(numberOr(input.reviewMaxInputTokens, base.reviewMaxInputTokens, 512, 65536)),
     reviewMaxOutputTokens: Math.round(numberOr(input.reviewMaxOutputTokens, base.reviewMaxOutputTokens, 128, 8192)),
-    recallEnabled: booleanOr(input.recallEnabled, base.recallEnabled),
+    recallSource: normalizeRecallSource(input.recallSource, input.recallEnabled, input.recallUrl),
     recallUrl: textOr(input.recallUrl, base.recallUrl),
     recallLimit: Math.round(numberOr(input.recallLimit, base.recallLimit, 1, 20)),
     recallTimeoutMs: Math.round(numberOr(input.recallTimeoutMs, base.recallTimeoutMs, 200, 10_000)),

@@ -259,6 +259,16 @@ export function apply(ctx: Context): void {
   });
 
   const memoryRecall = new MemoryRecall({
+    source: () => config.recallSource,
+    aurabot: () => {
+      try {
+        return ctx.get('aurabot') as unknown as
+          | { call?: (input: { module: string; method: string; args?: unknown[] }) => Promise<unknown> }
+          | undefined;
+      } catch {
+        return undefined;
+      }
+    },
     url: () => config.recallUrl,
     limit: () => config.recallLimit,
     timeoutMs: () => config.recallTimeoutMs,
