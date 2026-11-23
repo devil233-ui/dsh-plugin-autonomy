@@ -27,7 +27,8 @@
     "build:client": "node scripts/build-client.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "tsc -p tsconfig.json && node --test 'dist/test/*.test.js'",
-    "prepare": "pnpm build && node scripts/build-client.mjs"
+    "prepare": "pnpm build && node scripts/build-client.mjs",
+    "prepack": "pnpm build && node scripts/build-client.mjs"
   },
   "dsh": {
     "bundle": {
