@@ -451,7 +451,7 @@ export function AutonomyPage(): ReactElement {
   const wishesTab = (): ReactElement =>
     React.createElement('div', { className: 'da-body' },
       React.createElement('div', { className: 'da-sub' },
-        'dsh-aurabot-qq 的日记（local-diary）里许下的愿，不是待办：可能很久，也可能永远做不到。醒来时它们单独摆在提示词里，附原文路径，她想回看就能去读。'),
+        'dsh-aurabot-qq 的日记（local-diary）里许下的愿，不是待办：可能很久，也可能永远做不到。醒来时它们单独摆在提示词里，附原文路径，她想回看就能去读，她完成了可以自己划掉。'),
       React.createElement('div', { className: 'da-row', style: { gap: '8px', flexWrap: 'wrap' } },
         React.createElement('input', { className: 'da-input', style: { flex: '1 1 260px' }, placeholder: '她又许了个愿…', id: 'da-new-wish' }),
         React.createElement('input', { className: 'da-input', style: { width: '150px' }, placeholder: '日记日期 2026-11-22', id: 'da-new-wish-day' }),

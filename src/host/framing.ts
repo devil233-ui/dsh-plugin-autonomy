@@ -85,7 +85,7 @@ export function renderFramingText(input: FramingInput): string {
   const wishes = input.wishes ?? [];
   if (wishes.length > 0) {
     lines.push(
-      'Wishes you wrote down in your diary (the dsh-aurabot-qq plugin\'s local-diary module writes that file; these lines are pulled from it, not invented here). They are not todos — some may take a long time, some may never happen, and nothing here is expected of you. The path after each line is the diary entry it came from, so you can read the original:',
+      'Wishes you wrote down in your diary (the dsh-aurabot-qq plugin\'s local-diary module writes that file; these lines are pulled from it, not invented here). They are not todos — some may take a long time, some may never happen, and nothing here is expected of you. The path after each line is the diary entry it came from, so you can read the original. When one is done — or you no longer want it on the list — drop it yourself with autonomy_wishes({ action: 'drop', id }):',
     );
     for (const wish of wishes) {
       const day = wish.day.trim();
