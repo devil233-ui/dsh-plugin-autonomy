@@ -185,9 +185,9 @@ export function apply(ctx: Context): void {
     },
     now: () => Date.now(),
     log: (level: 'info' | 'warn' | 'error', message: string) => logger[level](message),
-    // 说话走 aura 的服务（同进程直接调用），不经它的 tools.restrict：
+    // 说话走 dsh-aurabot-qq 的服务（同进程直接调用），不经它的 tools.restrict：
     // 群会话里的工具闸只在「这一轮不是主人」时收起工具，管不到这条服务路径；
-    // 目标白名单、试运行、总开关仍然是 aura 自己的 canSend 说了算。
+    // 目标白名单、试运行、总开关仍然是 dsh-aurabot-qq 自己的 canSend 说了算。
     say: async (target: string, text: string): Promise<unknown> => {
       let bridge: { send?: (input: { target?: string; text: string }) => Promise<unknown> } | undefined;
       try {
@@ -196,7 +196,7 @@ export function apply(ctx: Context): void {
         bridge = undefined;
       }
       if (bridge === undefined || typeof bridge.send !== 'function') {
-        return { ok: false, message: 'aurabot 服务不可用（没装 aura 插件）' };
+        return { ok: false, message: 'aurabot 服务不可用（没装 dsh-aurabot-qq 插件）' };
       }
       return target === '' ? await bridge.send({ text }) : await bridge.send({ target, text });
     },
@@ -251,8 +251,8 @@ export function apply(ctx: Context): void {
     }
   };
 
-  // 召回走记忆库自己的只读接口；它跟 aura 无关，aura 那边只剩它自己跑的系统回合。
-  // 心情走 aura 的 mood 模块（同进程直接拿对象）。拿不到就当这轮没有心情。
+  // 召回走记忆库自己的只读接口；它跟 dsh-aurabot-qq 无关，dsh-aurabot-qq 那边只剩它自己跑的系统回合。
+  // 心情走 dsh-aurabot-qq 的 mood 模块（同进程直接拿对象）。拿不到就当这轮没有心情。
   const moodProbe = new MoodProbe({
     module: () => (ctx.get('aurabot') as unknown as { use?: (id: string) => unknown } | undefined)?.use?.('mood'),
     log: logger,
@@ -266,7 +266,7 @@ export function apply(ctx: Context): void {
     log: logger,
   });
 
-  // 复盘那一轮走 aura 的系统回合（不占任何聊天），记忆走它的 memory 模块；
+  // 复盘那一轮走 dsh-aurabot-qq 的系统回合（不占任何聊天），记忆走它的 memory 模块；
   // 两样都拿不到就退回确定性模板，复盘照做，只是不蒸馏。
   const reviewer = new Reviewer({
     config: () => config,
@@ -279,7 +279,7 @@ export function apply(ctx: Context): void {
         | { hub?: { runSystemTurn?: (name: string, title: string, prompt: string, opts: Record<string, unknown>) => Promise<unknown> } }
         | undefined;
       const hub = bridge?.hub;
-      if (hub === undefined || typeof hub.runSystemTurn !== 'function') throw new Error('aura bot hub 不可用');
+      if (hub === undefined || typeof hub.runSystemTurn !== 'function') throw new Error('dsh-aurabot-qq 的 hub 不可用');
       const reply = await hub.runSystemTurn('autonomy-review', '自主 · 复盘', prompt, {
         timeoutMs: options.timeoutMs,
         noTools: true,
@@ -294,7 +294,7 @@ export function apply(ctx: Context): void {
       const bridge = ctx.get('aurabot') as unknown as
         | { call?: (input: { module: string; method: string; args: unknown[] }) => Promise<unknown> }
         | undefined;
-      if (bridge === undefined || typeof bridge.call !== 'function') return 'aura bot 的 call 不可用';
+      if (bridge === undefined || typeof bridge.call !== 'function') return 'dsh-aurabot-qq 的 call 不可用';
       const result = (await bridge.call({ module: 'memory', method: 'addEvent', args: [{ text, tags: ['自主', '复盘'], importance: 0.5 }] })) as
         | { ok?: boolean; message?: string }
         | undefined;

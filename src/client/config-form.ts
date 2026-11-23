@@ -63,7 +63,7 @@ export const CONFIG_GROUPS: GroupSpec[] = [
       { key: 'speakCooldownMinutes', label: '同一聊天的发言间隔（分钟）', hint: '说过一次后这段时间内不再往同一处发；0 = 不管', kind: 'number', step: '1' },
       { key: 'scoreEnabled', label: '唤醒时给意图打分', kind: 'bool' },
       { key: 'scoreThreshold', label: '打分门槛（0-1）', kind: 'number', step: '0.05' },
-      { key: 'moodEnabled', label: '按她的心情调制这一轮摆什么（不动节奏）', kind: 'bool' },
+      { key: 'moodEnabled', label: '按她的心情调制这一轮摆什么（不动节奏）', hint: '心情读自 dsh-aurabot-qq 的心情模块；没装它、或它没开心情模块，就跳过这一档，唤醒照常', kind: 'bool' },
     ],
   },
   {
@@ -80,8 +80,8 @@ export const CONFIG_GROUPS: GroupSpec[] = [
   {
     title: '记忆召回',
     fields: [
-      { key: 'recallEnabled', label: '醒来前先查记忆库', hint: '按这一轮的意图当关键词，把查到的几段塞进提示词；查不到就当没有', kind: 'bool' },
-      { key: 'recallUrl', label: '召回接口', hint: '填 MemoryConstellations 的 /api/recall 地址，例如 http://127.0.0.1:3100/api/recall；留空=不查', kind: 'text' },
+      { key: 'recallEnabled', label: '醒来前先查记忆库', hint: '可选：醒来前拿台账当关键词，去你自己部署的记忆库查一段旧事塞进提示词；地址为空时整段跳过', kind: 'bool' },
+      { key: 'recallUrl', label: '召回接口', hint: '可选。填你那套 MemoryConstellations 的 /api/recall 地址（部署在哪就填哪）；留空=不查，不影响其他功能', kind: 'text' },
       { key: 'recallLimit', label: '最多几条', kind: 'number', step: '1' },
       { key: 'recallTimeoutMs', label: '超时（毫秒）', hint: '查不到就跳过，不耽误这一轮', kind: 'number', step: '100' },
       { key: 'recallMaxChars', label: '最多塞多少字', kind: 'number', step: '50' },

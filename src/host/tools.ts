@@ -5,7 +5,7 @@
  *
  *   autonomy_schedule  read / set / cancel this session's self-scheduled wake
  *   autonomy_intents   the intent ledger: list, remember, revise, complete, abandon
- *   autonomy_say       speak through the installed aura bot (QQ), target-gated
+ *   autonomy_say       speak through the installed dsh-aurabot-qq plugin (QQ), target-gated
  *   autonomy_finish    end an autonomous turn: acted or no_action, plus a reason
  */
 
@@ -32,13 +32,13 @@ export interface ToolServices {
   now(): number;
   log(level: 'info' | 'warn' | 'error', message: string): void;
   /**
-   * Send one message through the aura bot bridge (`ctx.get('aurabot').send`).
-   * Absent when aura is not installed, which is a normal deployment.
+   * Send one message through the dsh-aurabot-qq bridge (`ctx.get('aurabot').send`).
+   * Absent when dsh-aurabot-qq is not installed, which is a normal deployment.
    */
   say?(target: string, text: string): Promise<unknown>;
   /**
-   * The aura bot's recent events (`ctx.get('aurabot').events`), used only to
-   * tell whether a chat is mid-exchange. Absent without aura as well.
+   * dsh-aurabot-qq's recent events (`ctx.get('aurabot').events`), used only to
+   * tell whether a chat is mid-exchange. Absent without that plugin as well.
    */
   recentEvents?(): Promise<unknown>;
   /** 愿望栏（日记里的愿望，不是待办）。 */
@@ -364,7 +364,7 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
     defineTool({
       name: 'autonomy_say',
       description:
-        'Speak through the aura bot (QQ) from an autonomous turn. The owner in private is always reachable by omitting target; other chats must be whitelisted. A chat where someone is waiting for her answer, or the same chat inside the cooldown window, is refused — pass when_free to queue it instead and have it delivered once the chat goes quiet (it expires after outboxTtlMinutes). The aura bot still applies its own rules and reports back what happened. Use it when saying something is worth more than staying silent — most wakes end without it.',
+        'Speak through the dsh-aurabot-qq plugin (QQ) from an autonomous turn. The owner in private is always reachable by omitting target; other chats must be whitelisted. A chat where someone is waiting for her answer, or the same chat inside the cooldown window, is refused — pass when_free to queue it instead and have it delivered once the chat goes quiet (it expires after outboxTtlMinutes). dsh-aurabot-qq still applies its own outbound rules and reports back what happened. Use it when saying something is worth more than staying silent — most wakes end without it.',
       parameters: {
         target: { type: 'string', required: true, description: 'A whitelisted chat: group:<qq> or private:<qq>. Omit (empty) to message the owner in private.' },
         when_free: {
@@ -417,7 +417,7 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
           const cuttingIn = interjectionDenied(target, events, services.now(), config.speakCooldownMinutes * 60_000);
           if (cuttingIn !== '') return refuse(cuttingIn);
         }
-        if (services.say === undefined) return json({ error: 'the aura bot bridge is not available in this host' });
+        if (services.say === undefined) return json({ error: 'dsh-aurabot-qq is not available in this host, so nothing can be sent' });
         try {
           const result = await services.say(target, text);
           return json(result);
@@ -466,7 +466,7 @@ export function autonomyToolDefinitions(agent: Agent, services: ToolServices) {
     defineTool({
       name: 'autonomy_wishes',
       description:
-        'Wishes from your diary (written by the aura local-diary module). They are kept apart from the intent ledger because they are not todos: some are large or long-term and may never happen. action=list shows each wish with the diary day and the original file path so you can read the source; action=drop removes one you no longer want to keep.',
+        'Wishes from your diary (written by the dsh-aurabot-qq plugin\'s local-diary module). They are kept apart from the intent ledger because they are not todos: some are large or long-term and may never happen. action=list shows each wish with the diary day and the original file path so you can read the source; action=drop removes one you no longer want to keep.',
       parameters: {
         action: { type: 'string', required: true, description: 'list | drop' },
         id: { type: 'string', description: 'wish id (required for drop)' },

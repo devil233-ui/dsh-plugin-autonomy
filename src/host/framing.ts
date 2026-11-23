@@ -85,7 +85,7 @@ export function renderFramingText(input: FramingInput): string {
   const wishes = input.wishes ?? [];
   if (wishes.length > 0) {
     lines.push(
-      'Wishes you wrote down in your diary (the aura bot\'s local-diary module writes that file; these lines are pulled from it, not invented here). They are not todos — some may take a long time, some may never happen, and nothing here is expected of you. The path after each line is the diary entry it came from, so you can read the original:',
+      'Wishes you wrote down in your diary (the dsh-aurabot-qq plugin\'s local-diary module writes that file; these lines are pulled from it, not invented here). They are not todos — some may take a long time, some may never happen, and nothing here is expected of you. The path after each line is the diary entry it came from, so you can read the original:',
     );
     for (const wish of wishes) {
       const day = wish.day.trim();
@@ -134,7 +134,7 @@ export function renderFramingText(input: FramingInput): string {
     );
   } else {
     lines.push(
-      `If speaking is the right move, use autonomy_say({ text }) to message the owner in private (always open), or autonomy_say({ target, text }) with one of the whitelisted chats: ${speakTargets.join(', ')}. A chat outside that list is refused before it reaches the bot. Two more refusals: a chat where someone is still waiting for her answer, and the same chat again inside the cooldown window. The aura bot applies its own rules on top and reports back what happened.`,
+      `If speaking is the right move, use autonomy_say({ text }) to message the owner in private (always open), or autonomy_say({ target, text }) with one of the whitelisted chats: ${speakTargets.join(', ')}. A chat outside that list is refused before it reaches the bot. Two more refusals: a chat where someone is still waiting for her answer, and the same chat again inside the cooldown window. The dsh-aurabot-qq plugin applies its own outbound rules on top and reports back what happened.`,
     );
   }
   lines.push(

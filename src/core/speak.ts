@@ -3,9 +3,9 @@
  *
  * This plugin keeps its own allowlist, and it is empty by default: an
  * autonomous turn cannot send anything until the operator names the chats.
- * The aura bot's outbound rules still apply on top — its list, quiet hours,
- * dry run and master switch — but they are a share gate, not a policy: aura
- * also rate-limits by mood and activity, so "aura would allow it" is not the
+ * dsh-aurabot-qq's outbound rules still apply on top — its list, quiet hours,
+ * dry run and master switch — but they are a share gate, not a policy: dsh-aurabot-qq
+ * also rate-limits by mood and activity, so "dsh-aurabot-qq would allow it" is not the
  * same as "she is allowed to speak". Shape checks stay here too, so a typo
  * fails loudly instead of vanishing into the bridge.
  */
@@ -38,7 +38,7 @@ export function speakDenied(target: string, allowed: readonly string[]): string 
 }
 
 /**
- * One event from the aura bot's in-memory ring buffer.
+ * One event from dsh-aurabot-qq's in-memory ring buffer.
  *
  * The bridge records inbound (`message`) and outbound (`reply`) events with the
  * chat they belong to, which is enough to tell whether a chat is mid-exchange.

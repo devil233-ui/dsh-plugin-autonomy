@@ -3,7 +3,7 @@
  *
  * 触发门槛刻意保守——攒够 `reviewBatch` 条判断、且距上次复盘至少
  * `reviewMinGapMinutes` 分钟，就够一次；它**不碰唤醒节奏**，既不改下次掷骰
- * 时间，也不占用任何聊天会话（走 aura 的系统回合，没有就走模板）。
+ * 时间，也不占用任何聊天会话（走 dsh-aurabot-qq 的系统回合，没有就走模板）。
  */
 
 import { appendFileSync, mkdirSync } from 'node:fs';
@@ -26,7 +26,7 @@ export interface ReviewerDeps {
   dataDir: string;
   now(): number;
   log: { warn(message: string): void; info?(message: string): void };
-  /** 跑一轮不带工具的复盘回合；没接线（没装 aura）时退回模板。 */
+  /** 跑一轮不带工具的复盘回合；没接线（没装 dsh-aurabot-qq）时退回模板。 */
   runTurn?(prompt: string, options: { timeoutMs: number }): Promise<string>;
   /** 把值得记的话写进长期记忆；失败只记日志。 */
   remember?(text: string): Promise<unknown> | unknown;

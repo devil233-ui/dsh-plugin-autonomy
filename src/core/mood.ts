@@ -8,7 +8,7 @@
  */
 
 export interface MoodReading {
-  /** 0–100 的总值，aura 心情模块的 `state().value`。 */
+  /** 0–100 的总值，dsh-aurabot-qq 心情模块的 `state().value`。 */
   readonly value: number;
   /** 离散档位名，如「平静」，只用于记录与展示。 */
   readonly label: string;
@@ -37,7 +37,7 @@ function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/** 把 aura 心情模块的 `state()` 回包收敛成一个读得懂的两项。 */
+/** 把 dsh-aurabot-qq 心情模块的 `state()` 回包收敛成一个读得懂的两项。 */
 export function readMood(raw: unknown): MoodReading | undefined {
   if (typeof raw !== 'object' || raw === null) return undefined;
   const record = raw as { value?: unknown; label?: unknown };

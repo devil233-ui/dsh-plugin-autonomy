@@ -5,7 +5,7 @@
 ## 环境
 
 - Node 22 以上，pnpm。
-- 只需要 DSH 宿主本身即可开发；aura（`dsh-aurabot-qq`）与 MemoryConstellations 都是可选的，缺了只少对应能力。
+- 只需要 DSH 宿主本身即可开发；dsh-aurabot-qq（`dsh-aurabot-qq`）与 MemoryConstellations 都是可选的，缺了只少对应能力。
 
 ```bash
 pnpm install
@@ -43,5 +43,5 @@ pnpm test          # 全部用例
 ## 不要做的事
 
 - 不要为了「让测试过」而修改断言语义——先确认被改的行为是不是真的该改。
-- 不要在本仓库里直接改 aura 的安装副本；需要它配合的地方，走它自己的仓库提 PR。
+- 不要在本仓库里直接改 dsh-aurabot-qq 的安装副本；需要它配合的地方，走它自己的仓库提 PR。
 - `src/core/` 里不要引入 IO：时间从参数传进来，随机数从参数传进来，这样同一状态同一时钟永远得同一结果。

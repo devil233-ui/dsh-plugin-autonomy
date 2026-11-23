@@ -52,7 +52,7 @@ export interface AutonomyConfig {
   /**
    * Where a wake actually lands. Non-empty overrides `sessions`: the scheduler
    * watches this one session only, so her autonomous turns happen in her own
-   * room instead of a chat (an aura group session drops the local tools while
+   * room instead of a chat (an dsh-aurabot-qq group session drops the local tools while
    * the last speaker was a guest, which is exactly what a wake must not hit).
    */
   wakeSession: string;

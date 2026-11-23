@@ -32,23 +32,23 @@ pnpm test          # tsc -p tsconfig.json（含 client 与 test）+ node --test 
 5. **观察器认的事件名是本机宿主的**：助手发言是 `assistant/message`（不是 `message/inserted`），`time` 是毫秒数（不是 ISO 字符串）。两处都写错过一次，后果是「她说了什么」永远读不到、`minIdleMinutes` 静默失效。
 6. **冷会话按 `sessionController.resolveAgent` 恢复**，别裸调 `agents.resume({resumeSessionId})`：后者不带预设与模型，`agent.options.model` 为空，人设段的 `{{model}}` 拼不出来，整轮直接 `prompt variable "{{model}}" has no value`（2026-11-19 实测）。控制器不在的宿主再退回裸 resume。
 7. **面板要遍历全部已记录会话**，不只是当前 live 的：`StateStore.sessionIds()` 保证冷会话的历史仍然可见。`todayRuns` 是它们的合并时间线，按配置时区切「今天」，别用 `Date` 的本地日界。
-8. **唤醒落点与聊天会话分开**。`config.wakeSession` 非空时 `managedSessions()` 只返回它，掷骰、记账、台账全部落在这一个会话（面板「建一个她的会话」用 `sessionController.create({})` 现造）。原因是 aura 的群闸会在「这一轮不是主人」时把本机工具收走并黏住 live agent，唤醒落进群会话就只剩白名单工具（2026-11-19 实测 bash 直接 unknown tool）。
-9. **说话走 `aurabot` 服务，不走工具闸**。`autonomy_say` 内部 `ctx.get('aurabot').send({target, text})`。这条路径不是 `tools.restrict` 管的范围，所以群会话里被收走 qq 工具时它照样能发；试运行、总开关仍由 aura 的 `canSend` 判定。
+8. **唤醒落点与聊天会话分开**。`config.wakeSession` 非空时 `managedSessions()` 只返回它，掷骰、记账、台账全部落在这一个会话（面板「建一个她的会话」用 `sessionController.create({})` 现造）。原因是 dsh-aurabot-qq 的群闸会在「这一轮不是主人」时把本机工具收走并黏住 live agent，唤醒落进群会话就只剩白名单工具（2026-11-19 实测 bash 直接 unknown tool）。
+9. **说话走 `aurabot` 服务，不走工具闸**。`autonomy_say` 内部 `ctx.get('aurabot').send({target, text})`。这条路径不是 `tools.restrict` 管的范围，所以群会话里被收走 qq 工具时它照样能发；试运行、总开关仍由 dsh-aurabot-qq 的 `canSend` 判定。
 10. **说话是三道闸，顺序不能换**：①主人私聊恒放行（不写 `target` 就是发主人，不需要配置）；②`config.speakTargets` 只加「除主人之外」的去处，空 = 除主人外一律不发，拒绝话术里要写明主人私聊仍可用；③插队守卫：那个聊天有人说了话她还没回 → 拒；同一聊天冷却期内（`speakCooldownMinutes`，默认 3，0=关）说过 → 拒。守卫全部从 `aurabot.events()` 的事件环重算，不另存状态；读不到事件环就退化成只查名单，不能因此把发言全堵死。
 11. **唤醒永不抛异常**。宿主是 fail-loud（未捕获异常直接 exit(1)），而 `sessionController.resolveAgent` 可能返回 `{error}`；早期 `pickAgent` 把它当 agent、读 `.session.seq` 就把整个宿主带走了（2026-11-19 一次真实唤醒）。`looksLikeAgent` 必须验 `followup` 是函数、`session.seq` 是数字；`wake()` 外层 catch 成 `{status:'error'}`，调度侧再兜一层。
 12. **台账是跨会话的**。账本归 `config.wakeSession`（落点空时归工具所在会话），`autonomy_intents` 读写要合并「本会话 + 落点会话」，`revise/complete/abandon` 必须先找到真正持有该 id 的会话再改；面板行要带 `ownerSessionId`，否则在唤醒房间点「完成」会报 `no intent <id>`。
-13. **复盘不碰唤醒节奏**。攒够 `reviewBatch` 条判断（默认 5）、且距上次至少 `reviewMinGapMinutes`（默认 120）分钟，调度器才跑一次；它不改任何会话的 `nextCheckAt`、不占聊天会话，那一轮走 `aurabot.hub.runSystemTurn('autonomy-review', …, { noTools: true, key: 'review' })`，没装 aura 就退回 `templateReview` 的确定性模板。产出追加到 `<dataDir>/journal/<date>.md`，`memoryDrafts` 经 `aurabot.call({module:'memory', method:'addEvent'})` 落记忆。token 预算按 2 字符≈1 token 粗估，超了从最旧的记录开始裁（`buildReviewPrompt`）。
+13. **复盘不碰唤醒节奏**。攒够 `reviewBatch` 条判断（默认 5）、且距上次至少 `reviewMinGapMinutes`（默认 120）分钟，调度器才跑一次；它不改任何会话的 `nextCheckAt`、不占聊天会话，那一轮走 `aurabot.hub.runSystemTurn('autonomy-review', …, { noTools: true, key: 'review' })`，没装 dsh-aurabot-qq 就退回 `templateReview` 的确定性模板。产出追加到 `<dataDir>/journal/<date>.md`，`memoryDrafts` 经 `aurabot.call({module:'memory', method:'addEvent'})` 落记忆。token 预算按 2 字符≈1 token 粗估，超了从最旧的记录开始裁（`buildReviewPrompt`）。
 14. **打分是纯函数，可复算**。`src/core/score.ts` 只看 `dueAt/preferredAt/kind/source` 与传入的 `recent` 文本，权重 `SCORE_WEIGHTS` 固定；`scoreEnabled` 只决定是否把候选塞进 framing，不改变台账状态（低分的意图仍然开着）。
 
 ## 与 aurabot 的边界
 
-群会话能拿到哪些工具，由 aura 的 `groupGates` 决定：`applyGroupGate` 定义在 `chat/hub.js:225`，挂载群会话时先收起（`:1244`），之后**只在每条 QQ 消息进来时**按发送者重算一次（`:3348` 调 `turnSendersAllTools`，判据是主人 / 无发送者且 `group.timerAsOwner` / 每个发送者都在 `capabilityAllow.tools` 里）。DSH 的 `tools.restrict` 是**取交集**、没有反向解锁的 API，插件侧只能收紧，放不开别人收的闸。
+群会话能拿到哪些工具，由 dsh-aurabot-qq 的 `groupGates` 决定：`applyGroupGate` 定义在 `chat/hub.js:225`，挂载群会话时先收起（`:1244`），之后**只在每条 QQ 消息进来时**按发送者重算一次（`:3348` 调 `turnSendersAllTools`，判据是主人 / 无发送者且 `group.timerAsOwner` / 每个发送者都在 `capabilityAllow.tools` 里）。DSH 的 `tools.restrict` 是**取交集**、没有反向解锁的 API，插件侧只能收紧，放不开别人收的闸。
 
-**说话要用它的服务，不是它的工具。** aura 的 `bridge.dshTools` 关着时 `aurabot_qq_send` 不注册；插件侧要用就用 `ctx.get('aurabot').send`（源码注释里就这么建议）。`autonomy_say` 就是这么接的。
+**说话要用它的服务，不是它的工具。** dsh-aurabot-qq 的 `bridge.dshTools` 关着时 `aurabot_qq_send` 不注册；插件侧要用就用 `ctx.get('aurabot').send`（源码注释里就这么建议）。`autonomy_say` 就是这么接的。
 
-**不要改 aura 的代码。** 2026-11-19 我把它当成本需求（唤醒按主人回合给权限）的落点，往安装副本的 `hub.js` 打了热补丁，被用户当场制止并要求撤回——已按备份还原、字节一致。
+**不要改 dsh-aurabot-qq 的代码。** 2026-11-19 我把它当成本需求（唤醒按主人回合给权限）的落点，往安装副本的 `hub.js` 打了热补丁，被用户当场制止并要求撤回——已按备份还原、字节一致。
 
-那条需求后来的结论不是「落地了」，也不是「还欠着」：**它被落点分离绕开了**。唤醒现在只落在她自己的会话（`wakeSession`），不进群会话，`groupGates` 根本不参与。群里的闸对插件注入的回合仍然不重算——注入那条路不经过 `:3348`，只会继承上一轮 QQ 消息留下的锁（2026-11-19 15:28 那次 `bash` 报 unknown 就是这个机制）。aura 侧后来补的 `group.timerAsOwner`（默认 false，本机已开）只覆盖「无发送者的轮次」，`capabilityAllow.tools` 只覆盖「被授权的成员」，两者都不解决注入轮。要回群聊里唤醒，先解决这一条。
+那条需求后来的结论不是「落地了」，也不是「还欠着」：**它被落点分离绕开了**。唤醒现在只落在她自己的会话（`wakeSession`），不进群会话，`groupGates` 根本不参与。群里的闸对插件注入的回合仍然不重算——注入那条路不经过 `:3348`，只会继承上一轮 QQ 消息留下的锁（2026-11-19 15:28 那次 `bash` 报 unknown 就是这个机制）。dsh-aurabot-qq 侧后来补的 `group.timerAsOwner`（默认 false，本机已开）只覆盖「无发送者的轮次」，`capabilityAllow.tools` 只覆盖「被授权的成员」，两者都不解决注入轮。要回群聊里唤醒，先解决这一条。
 
 ## 隔离实例验证
 
