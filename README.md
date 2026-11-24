@@ -38,6 +38,9 @@ DSH 大肥鱼自主意识插件：外部节律 + 概率掷骰唤醒，她自行�
 
 ```bash
 dsh plugin add <本仓库路径或包名>
+
+# 或者装预构建包（已含 lib/，不需要本地构建）
+dsh plugin --profile web add "https://github.com/devil233-ui/dsh-plugin-autonomy/releases/download/v0.1.0/dsh-plugin-autonomy-0.1.0.tgz"
 ```
 
 插件以 `cordis.patch.yml` 声明 bundle，宿主热加载即可生效，无需重启。
@@ -200,7 +203,7 @@ node scripts/sync-diary-wishes.mjs \
 pnpm install
 pnpm build        # host 侧 tsc → lib/
 pnpm build:client # 客户端 esbuild → lib/client.js
-pnpm test         # 111 个用例，覆盖抖动、概率、跨夜与跨周窗口、意图状态机、run 生命周期、宿主契约
+pnpm test         # 118 个用例，覆盖抖动、概率、跨夜与跨周窗口、意图状态机、run 生命周期、宿主契约
 ```
 
 `src/core/` 是纯逻辑，不依赖任何 `@deepseek-ai` 包，可单独测试。
